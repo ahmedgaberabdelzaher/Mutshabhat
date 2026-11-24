@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "kind": "production",
+  "datasetVersion": 1,
+  "description": "PRODUCTION dataset: committee-approved records only. Empty until the scientific committee approves records (QMT-49). Never copy candidate data here.",
+  "groups": [],
+  "highlightRules": []
+}

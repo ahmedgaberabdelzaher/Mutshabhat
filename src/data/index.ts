@@ -2,8 +2,13 @@
  * Repository wiring. Screens import repositories from here, never JSON files directly,
  * so a later API-backed implementation can replace the local adapters without touching screens.
  */
+import { APP_FLAVOR, visibilityFor } from '@/config/flavor';
+
+import { loadBundledDataset } from './datasets';
+import { LocalMutashabihatRepository } from './mutashabihat-repository';
 import { LocalQuranRepository, type QuranMetaFile, type QuranTextFile } from './quran-repository';
 
+export type { Analogue, MutashabihatRepository, Scope, SimilarityFilter } from './mutashabihat-repository';
 export type { QuranRepository } from './quran-repository';
 
 let quranRepo: LocalQuranRepository | undefined;
@@ -17,4 +22,18 @@ export function getQuranRepository(): LocalQuranRepository {
     );
   }
   return quranRepo;
+}
+
+let mutRepo: LocalMutashabihatRepository | undefined;
+
+/** Mutashabihat repository for the current build flavor (review → candidate dataset; beta/production → approved only). */
+export function getMutashabihatRepository(): LocalMutashabihatRepository {
+  if (!mutRepo) {
+    const policy = visibilityFor(APP_FLAVOR);
+    const quran = getQuranRepository();
+    mutRepo = new LocalMutashabihatRepository(loadBundledDataset(policy.dataset), policy, (id) =>
+      quran.absoluteIndex(id),
+    );
+  }
+  return mutRepo;
 }

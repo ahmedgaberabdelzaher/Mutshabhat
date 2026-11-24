@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput } from 'react-native';
 
+import { FlavorBanner } from '@/components/flavor-banner';
 import { Button, Card, LinkRow, Muted, Screen, Title } from '@/components/ui';
 import { colors, spacing } from '@/config/theme';
 import { getQuranRepository } from '@/data';
@@ -24,6 +25,7 @@ export default function HomeScreen() {
 
   return (
     <Screen>
+      <FlavorBanner />
       <Card>
         <Title>انتقل إلى آية</Title>
         <TextInput
@@ -39,6 +41,7 @@ export default function HomeScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button label="فتح الآية" onPress={go} testID="open-ayah" />
       </Card>
+      <LinkRow href="/records" title="سجلات المتشابهات" subtitle="كل سجل مع حالته ومصدره" testID="records-link" />
       <LinkRow href="/quran" title="فهرس السور" subtitle="تصفّح نص المصحف سورةً سورة" />
       <LinkRow href="/sources" title="المصادر والإسناد" subtitle="تنزيل (CC BY 3.0) ومصادر المتشابهات والخط" testID="sources-link" />
       <Muted>نص المصحف من مشروع تنزيل (tanzil.net) برخصة CC BY 3.0، من غير أي تعديل.</Muted>
