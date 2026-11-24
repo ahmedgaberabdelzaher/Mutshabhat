@@ -137,6 +137,7 @@ function letterRangesFor(x: Tok, y: Tok, outA: DiffLetterRange[], outB: DiffLett
  *    Longer one-sided edges are treated as surrounding context, not as the difference.
  * 3. Same letters with different diacritics, or a 1↔1 substitution of similar words, get letter ranges.
  * 4. With < 30% overlap (or a single shared word in a longer ayah) the similarity is thematic: no ranges (no false precision).
+ *    Such pairs are classified `semantic` (see similarityOf); everything else is `lafzi`.
  */
 export function diffPair(sideA: Side, sideB: Side): PairDiff {
   const A = flatten(sideA);
@@ -207,4 +208,13 @@ export function diffPair(sideA: Side, sideB: Side): PairDiff {
     matchRatio,
     confidence,
   };
+}
+
+/**
+ * Lafzi vs semantic classification (PO decision, MVP = lafzi only). A pair is `semantic` when diffPair
+ * finds little shared wording: no shared word, a single shared word while the shorter side has > 4 words,
+ * or LCS overlap < 30% of the shorter side's words (letter-only keys). Otherwise `lafzi`.
+ */
+export function similarityOf(d: Pick<PairDiff, 'confidence'>): 'lafzi' | 'semantic' {
+  return d.confidence === 'low' ? 'semantic' : 'lafzi';
 }

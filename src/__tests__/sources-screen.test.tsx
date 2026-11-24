@@ -21,6 +21,15 @@ describe('Sources / attribution (QMT-24)', () => {
     expect(screen.getByText('الترخيص: Creative Commons Attribution 4.0 (CC BY 4.0)')).toBeTruthy();
   });
 
+  it('shows Quranpedia attribution per its licence: name, link and data version', async () => {
+    await renderRouter({ sources: SourcesScreen }, { initialUrl: '/sources' });
+    expect(screen.getByText('الموسوعة القرآنية (Quranpedia.net) — مركز أصول')).toBeTruthy();
+    expect(screen.getByTestId('source-link-quranpedia')).toHaveTextContent('https://quranpedia.net');
+    expect(screen.getByText('الترخيص: Quranpedia.net Data License — إصدار التفريغ 2026-11-21')).toBeTruthy();
+    expect(screen.getByText(/تاريخ نسخة البيانات \(dump version\): 2026-11-21/)).toBeTruthy();
+    expect(screen.getByText(/نص الترخيص: https:\/\/quranpedia.net\/dumps\/LICENSE.md/)).toBeTruthy();
+  });
+
   it('is reachable from the ayah view', async () => {
     await renderRouter({ 'ayah/[surah]/[ayah]': AyahScreen, sources: SourcesScreen }, { initialUrl: '/ayah/1/1' });
     expect(screen.getByTestId('ayah-attribution')).toHaveTextContent(/CC BY 3.0/);

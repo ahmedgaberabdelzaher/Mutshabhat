@@ -4,11 +4,12 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FlavorBanner } from '@/components/flavor-banner';
 import { ScopeToggle } from '@/components/scope-toggle';
+import { SimilarityToggle } from '@/components/similarity-toggle';
 import { StatusBadge, Tag } from '@/components/status-badge';
 import { Muted } from '@/components/ui';
 import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Scope } from '@/data';
-import { SOURCE_LABELS, type MutashabihGroup } from '@/domain/mutashabihat';
+import { SIMILARITY_LABELS, SOURCE_LABELS, type MutashabihGroup, type SimilarityType } from '@/domain/mutashabihat';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 function refLabel(id: string) {
@@ -21,7 +22,8 @@ export default function RecordsScreen() {
   const repo = getMutashabihatRepository();
   const review = repo.policy.flavor === 'review';
   const [scope, setScope] = useState<Scope>(review ? 'pilot' : 'all');
-  const groups = repo.getGroups(scope);
+  const [similarity, setSimilarity] = useState<SimilarityType>('lafzi');
+  const groups = repo.getGroups(scope, review ? similarity : 'lafzi');
 
   return (
     <FlatList
@@ -34,6 +36,7 @@ export default function RecordsScreen() {
         <View style={styles.header}>
           <FlavorBanner />
           {review ? <ScopeToggle value={scope} onChange={setScope} /> : null}
+          {review ? <SimilarityToggle value={similarity} onChange={setSimilarity} /> : null}
           <Muted>{`${toArabicDigits(groups.length)} سجلًا`}</Muted>
         </View>
       }
@@ -54,6 +57,7 @@ function RecordRow({ group, showBadge }: { group: MutashabihGroup; showBadge: bo
           {showBadge ? <StatusBadge status={group.status} testID={`status-${group.id}`} /> : null}
           <Tag label={SOURCE_LABELS[group.source.name]} />
           {group.pilot ? <Tag label="عيّنة اللجنة" /> : null}
+          {group.similarityType === 'semantic' ? <Tag label={SIMILARITY_LABELS.semantic} /> : null}
         </View>
         <Text style={styles.refs}>{group.members.map((m) => refLabel(m.ayahId)).join(' · ')}</Text>
         {group.note ? (

@@ -3,10 +3,12 @@ import { useState, type ReactNode } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ScopeToggle } from '@/components/scope-toggle';
+import { SimilarityToggle } from '@/components/similarity-toggle';
 import { StatusBadge, Tag } from '@/components/status-badge';
 import { Muted } from '@/components/ui';
 import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Position, type Scope } from '@/data';
+import type { SimilarityType } from '@/domain/mutashabihat';
 import type { AyahId } from '@/domain/quran';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
@@ -18,7 +20,8 @@ export function PositionList({ ayahIds, header }: { ayahIds: AyahId[]; header?: 
   const repo = getMutashabihatRepository();
   const review = repo.policy.flavor === 'review';
   const [scope, setScope] = useState<Scope>('all');
-  const positions = repo.getPositionsIn(ayahIds, review ? scope : 'all');
+  const [similarity, setSimilarity] = useState<SimilarityType>('lafzi');
+  const positions = repo.getPositionsIn(ayahIds, review ? scope : 'all', review ? similarity : 'lafzi');
 
   return (
     <FlatList
@@ -31,6 +34,7 @@ export function PositionList({ ayahIds, header }: { ayahIds: AyahId[]; header?: 
         <View style={styles.header}>
           {header}
           {review ? <ScopeToggle value={scope} onChange={setScope} /> : null}
+          {review ? <SimilarityToggle value={similarity} onChange={setSimilarity} /> : null}
           <Muted testID="positions-count">{`${toArabicDigits(positions.length)} موضعًا`}</Muted>
         </View>
       }
