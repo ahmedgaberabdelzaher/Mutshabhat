@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FlavorBanner } from '@/components/flavor-banner';
+import { ListTitleText } from '@/components/list-title';
 import { ScopeToggle } from '@/components/scope-toggle';
 import { SimilarityToggle } from '@/components/similarity-toggle';
 import { SimilarityBadge, StatusBadge, Tag } from '@/components/status-badge';
@@ -10,6 +11,7 @@ import { Muted } from '@/components/ui';
 import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Scope } from '@/data';
 import { SOURCE_LABELS, type MutashabihGroup, type SimilarityType } from '@/domain/mutashabihat';
+import { fallbackTitle, groupTitle } from '@/domain/title';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 function refLabel(id: string) {
@@ -53,6 +55,11 @@ function RecordRow({ group, showBadge }: { group: MutashabihGroup; showBadge: bo
       href={{ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(first.surah), ayah: String(first.ayah) } }}
       asChild>
       <Pressable style={styles.row} testID={`record-${group.id}`}>
+        <ListTitleText
+          title={groupTitle(group) ?? fallbackTitle(first)}
+          similarityType={group.similarityType ?? 'lafzi'}
+          testID={`title-record-${group.id}`}
+        />
         <View style={styles.badges}>
           {showBadge ? <StatusBadge status={group.status} testID={`status-${group.id}`} /> : null}
           <Tag label={SOURCE_LABELS[group.source.name]} />
@@ -85,6 +92,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   badges: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  refs: { fontSize: 16, color: colors.text, fontWeight: '600' },
+  refs: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   note: { fontSize: 13, color: colors.textMuted },
 });

@@ -60,11 +60,25 @@ export type MutashabihGroup = {
   sourceCategory?: string;
   /** Waqar144 `ctx`: show part of the following ayah for context. */
   showNextAyahContext?: boolean;
+  /** List title for the group (records screen); see docs/DATA_MODEL.md for the > 2 members rule. */
+  title?: TitleSpan;
+  titleBasis?: TitleBasis;
+  /** How many members contain the title phrase. */
+  titleCoverage?: number;
   /** Group-level classification: lafzi if at least one of its pairs is lafzi. Beta/production require 'lafzi'. */
   similarityType?: SimilarityType;
 };
 
 /** Highlight rule for one pair of members (QMT-26). Stored in data so the committee can edit it without a rebuild. */
+/**
+ * List title (QMT-26 list titles): the similar word/phrase itself, as an exact word span of the Tanzil text
+ * (`text` = words startWord..endWord joined by spaces, i.e. an exact substring of the ayah). Generated at
+ * build time; the committee may edit it (basis = committee) and ship it as data (OTA).
+ */
+export type TitleSpan = { ayahId: AyahId; startWord: number; endWord: number; text: string };
+/** phrase = shared phrase (method=phrase); lcs = longest common contiguous part; fallback = beginning of the ayah. */
+export type TitleBasis = 'phrase' | 'lcs' | 'fallback' | 'committee';
+
 export type HighlightRule = {
   id: string;
   /** Ayah ids (first ayah of each member) of the pair, lexicographically ordered by mushaf position. */
@@ -81,6 +95,9 @@ export type HighlightRule = {
    * phrase of ≥ 3 words, highlighted around that phrase (see phraseDiff in src/domain/diff.ts).
    */
   method?: 'lcs' | 'phrase';
+  /** List title for this pair: one span per side, [pair[0] side, pair[1] side] (each in its own wording). */
+  titles?: [TitleSpan, TitleSpan];
+  titleBasis?: TitleBasis;
   /** For method=phrase: the shared phrase(s) located on each side (word ranges). */
   phrases?: { a: WordRange[]; b: WordRange[]; length: number }[];
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */

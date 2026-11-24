@@ -2,12 +2,14 @@ import { Link } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AyahText } from '@/components/ayah-text';
+import { ListTitleText } from '@/components/list-title';
 import { SimilarityBadge, StatusBadge, Tag } from '@/components/status-badge';
 import { colors, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Analogue } from '@/data';
 import { rangesFor } from '@/domain/highlight';
 import { SIMILARITY_LABELS, SOURCE_LABELS, type HighlightRule } from '@/domain/mutashabihat';
 import type { Ayah } from '@/domain/quran';
+import { fallbackTitle, pairTitle } from '@/domain/title';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 type Props = { analogue: Analogue; showBadge: boolean };
@@ -76,9 +78,12 @@ export function AnalogueCard({ analogue, showBadge }: Props) {
   const otherHl = rangesFor(rule, analogue.ayahIds);
   const first = other[0];
   const g = analogue.primary;
+  // Title = the similar word/phrase, in this analogue's wording, from the rule data.
+  const title = pairTitle(rule, analogue.ayahIds) ?? fallbackTitle(first);
 
   return (
     <View style={styles.card} testID={`analogue-${analogue.ayahId}`}>
+      <ListTitleText title={title} similarityType={analogue.similarityType} testID={`title-analogue-${analogue.ayahId}`} />
       <View style={styles.head}>
         <Link
           href={{ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(first.surah), ayah: String(first.ayah) } }}

@@ -53,6 +53,20 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.getByTestId('rule-3:15')).toHaveTextContent(/إبراز آلي حول العبارة المشتركة/);
   });
 
+  it('titles each analogue with the similar phrase itself (analogue wording) and keeps the details', async () => {
+    const screen = await open('/ayah/2/25');
+    const words = getQuranRepository().getAyah('3:15').words;
+    expect(screen.getByTestId('title-analogue-3:15')).toHaveTextContent(words.slice(9, 14).join(' '), { exact: true });
+    expect(screen.getByTestId('analogue-3:15')).toHaveTextContent(/آل عمران ١٥/); // surah + ayah number kept
+  });
+
+  it('falls back to the beginning of the ayah + type badge when nothing is shared', async () => {
+    const screen = await open('/ayah/75/31');
+    const text = getQuranRepository().getAyah('75:32').text; // 3 words: the whole ayah
+    expect(screen.getByTestId('title-analogue-75:32')).toHaveTextContent(`${text} …`, { exact: true });
+    expect(screen.getByTestId('title-analogue-75:32-type')).toHaveTextContent('تشابه معنوي');
+  });
+
   it('handles an ayah with no analogues', async () => {
     const screen = await open('/ayah/108/1');
     expect(screen.getByTestId('no-analogues')).toHaveTextContent('لا توجد نظائر مرشّحة لهذه الآية.');

@@ -9,6 +9,7 @@ import type {
   SourceName,
 } from '@/domain/mutashabihat';
 import type { AyahId } from '@/domain/quran';
+import { pairTitle, type ListTitle } from '@/domain/title';
 
 export type Scope = 'all' | 'pilot';
 /** Which similarity types to list. Default everywhere is 'lafzi' (MVP); 'semantic' is a review-build filter. */
@@ -38,6 +39,10 @@ export type Position = {
   analogueCount: number;
   statuses: ReviewStatus[];
   pilot: boolean;
+  /** Similarity type of the first analogue (shown with fallback titles). */
+  similarityType: SimilarityType;
+  /** Title from the first (primary) analogue's rule, in this ayah's wording; undefined → UI fallback. */
+  title?: ListTitle;
 };
 
 export type DatasetInfo = {
@@ -220,6 +225,8 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
         analogueCount: analogues.length,
         statuses: [...new Set(analogues.map((a) => a.status))],
         pilot: analogues.some((a) => a.pilot),
+        similarityType: analogues[0].similarityType,
+        title: pairTitle(this.getHighlightRule(analogues[0].selfAyahIds[0], analogues[0].ayahId), analogues[0].selfAyahIds),
       });
     }
     return out.sort((a, b) => this.positionOf(a.ayahId) - this.positionOf(b.ayahId));

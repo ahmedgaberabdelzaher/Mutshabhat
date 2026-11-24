@@ -2,6 +2,7 @@ import { visibilityFor } from '@/config/flavor';
 import { loadBundledDataset } from '@/data/datasets';
 import { LocalMutashabihatRepository } from '@/data/mutashabihat-repository';
 import { getQuranRepository } from '@/data';
+import { comparisonKey } from '@/domain/diff';
 import type { MutashabihatDataset } from '@/domain/mutashabihat';
 
 const quran = getQuranRepository();
@@ -97,6 +98,44 @@ describe('bundled datasets (QMT-48 AC2)', () => {
     const count = (t: string) => review.highlightRules.filter((r) => r.similarityType === t).length;
     expect(count('lafzi')).toBeGreaterThan(1000);
     expect(count('semantic')).toBeGreaterThan(1000);
+  });
+
+  it('list titles are exact substrings of the Tanzil text, generated as data for every pair and group', () => {
+    const check = (t: { ayahId: string; startWord: number; endWord: number; text: string }) => {
+      const ayah = quran.getAyah(t.ayahId)!;
+      expect(t.text).toBe(ayah.words.slice(t.startWord, t.endWord + 1).join(' '));
+      expect(ayah.text.includes(t.text)).toBe(true);
+      expect(t.text.length).toBeGreaterThan(0);
+    };
+    const basis: Record<string, number> = {};
+    for (const r of review.highlightRules) {
+      expect(r.titles).toHaveLength(2);
+      r.titles!.forEach(check);
+      basis[r.titleBasis!] = (basis[r.titleBasis!] ?? 0) + 1;
+      if (r.titleBasis === 'phrase') expect(r.method).toBe('phrase');
+      // Phrase titles: ≥ 3 words, or ≥ 2 when the shared phrase crosses an ayah end (title stays inside one ayah,
+      // e.g. 27:17 ~ 27:83 «فَهُمْ يُوزَعُونَ | حَتَّىٰٓ إِذَا»).
+      if (r.titleBasis === 'phrase') expect(r.titles![0].endWord - r.titles![0].startWord).toBeGreaterThanOrEqual(1);
+      if (r.titleBasis === 'fallback') expect(r.titles!.every((t) => t.startWord === 0 && t.endWord < 5)).toBe(true);
+      if (r.titleBasis !== 'fallback') {
+        // Both sides carry the same words (letter-only keys), each in its own exact wording.
+        const keys = (t: { text: string }) => t.text.split(' ').map(comparisonKey).filter(Boolean).join(' ');
+        expect(keys(r.titles![0])).toBe(keys(r.titles![1]));
+      }
+    }
+    expect(Object.keys(basis).sort()).toEqual(['fallback', 'lcs', 'phrase']);
+    for (const g of review.groups) {
+      check(g.title!);
+      expect(g.titleCoverage).toBeLessThanOrEqual(g.members.length);
+      if (g.titleBasis !== 'fallback') expect(g.titleCoverage).toBeGreaterThanOrEqual(2);
+    }
+    // 2:25 ~ 3:15: the shared phrase, in each ayah's own wording.
+    const r = review.highlightRules.find((x) => x.pair.join() === '2:25,3:15')!;
+    expect(r.titleBasis).toBe('phrase');
+    expect(r.titles!.map((t) => t.text)).toEqual([
+      quran.getAyah('2:25')!.words.slice(7, 12).join(' '), // جَنَّٰتٍ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
+      quran.getAyah('3:15')!.words.slice(9, 14).join(' '), // جَنَّٰتٌ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
+    ]);
   });
 
   it('review build lists all 285 HifzLink pilot pairs in the default view, whatever their type', () => {

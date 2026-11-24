@@ -343,3 +343,56 @@ export function phraseDiff(sideA: Side, sideB: Side): PhraseDiff {
 export function similarityOf(d: Pick<PairDiff, 'confidence' | 'sharedRun'>): 'lafzi' | 'semantic' {
   return d.confidence === 'low' && d.sharedRun < MIN_PHRASE ? 'semantic' : 'lafzi';
 }
+
+/** Minimum words for a shared part to be used as a list title. */
+export const MIN_TITLE_WORDS = 2;
+
+/**
+ * Longest common contiguous part of two sides (letter-only keys), kept inside ONE ayah on each side so its
+ * text is an exact substring of that ayah. Returns null when shorter than minWords.
+ */
+export function sharedSpan(
+  sideA: Side,
+  sideB: Side,
+  minWords: number = MIN_TITLE_WORDS,
+): { a: DiffWordRange; b: DiffWordRange; length: number } | null {
+  const A = flatten(sideA);
+  const B = flatten(sideB);
+  let best = { i: 0, j: 0, len: 0 };
+  let prev = new Array<number>(B.length + 1).fill(0);
+  for (let i = 1; i <= A.length; i++) {
+    const cur = new Array<number>(B.length + 1).fill(0);
+    for (let j = 1; j <= B.length; j++) {
+      if (A[i - 1].key !== B[j - 1].key) continue;
+      const contA = i > 1 && A[i - 2].ayahId === A[i - 1].ayahId;
+      const contB = j > 1 && B[j - 2].ayahId === B[j - 1].ayahId;
+      cur[j] = contA && contB ? prev[j - 1] + 1 : 1;
+      if (cur[j] > best.len) best = { i: i - cur[j], j: j - cur[j], len: cur[j] };
+    }
+    prev = cur;
+  }
+  if (best.len < minWords) return null;
+  const a0 = A[best.i];
+  const a1 = A[best.i + best.len - 1];
+  const b0 = B[best.j];
+  const b1 = B[best.j + best.len - 1];
+  return {
+    a: { ayahId: a0.ayahId, startWord: a0.word, endWord: a1.word },
+    b: { ayahId: b0.ayahId, startWord: b0.word, endWord: b1.word },
+    length: best.len,
+  };
+}
+
+/** Where a key sequence occurs contiguously (inside one ayah) in a side, or null. */
+export function findKeySequence(side: Side, keys: string[]): DiffWordRange | null {
+  if (!keys.length) return null;
+  const T = flatten(side);
+  for (let i = 0; i + keys.length <= T.length; i++) {
+    let ok = true;
+    for (let k = 0; k < keys.length && ok; k++) {
+      ok = T[i + k].key === keys[k] && T[i + k].ayahId === T[i].ayahId;
+    }
+    if (ok) return { ayahId: T[i].ayahId, startWord: T[i].word, endWord: T[i + keys.length - 1].word };
+  }
+  return null;
+}

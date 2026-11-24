@@ -1,4 +1,14 @@
-import { clusters, comparisonKey, diffPair, letterDiff, phraseDiff, similarityOf, type Side } from '@/domain/diff';
+import {
+  clusters,
+  comparisonKey,
+  diffPair,
+  findKeySequence,
+  letterDiff,
+  phraseDiff,
+  sharedSpan,
+  similarityOf,
+  type Side,
+} from '@/domain/diff';
 import { getQuranRepository } from '@/data';
 
 const side = (id: string, text: string): Side => [{ ayahId: id, words: text.split(' ') }];
@@ -119,6 +129,29 @@ describe('auto diff (QMT-26)', () => {
     expect(d.sharedRun).toBeLessThan(3);
     expect(similarityOf(d)).toBe('semantic');
     expect(phraseDiff(real('75:31'), real('75:32')).phrases).toEqual([]);
+  });
+
+  it('sharedSpan: longest common contiguous part, inside one ayah per side (list titles)', () => {
+    expect(sharedSpan(real('2:25'), real('3:15'))).toEqual({
+      a: { ayahId: '2:25', startWord: 7, endWord: 11 },
+      b: { ayahId: '3:15', startWord: 9, endWord: 13 },
+      length: 5,
+    });
+    expect(sharedSpan(real('2:2'), real('27:2'))).toBeNull(); // only «هُدًى» shared…
+    expect(sharedSpan(real('2:2'), real('27:2'), 1)?.length).toBe(1); // …allowed for lafzi titles
+    expect(sharedSpan(real('75:31'), real('75:32'), 1)).toBeNull();
+    // A run never crosses an ayah boundary (the title must be a substring of ONE ayah).
+    const twoAyahs: Side = [
+      { ayahId: '1:1', words: ['أ', 'ب'] },
+      { ayahId: '1:2', words: ['ج', 'د'] },
+    ];
+    expect(sharedSpan(twoAyahs, side('9:9', 'أ ب ج د'))?.length).toBe(2);
+  });
+
+  it('findKeySequence matches by letters only, inside one ayah', () => {
+    const keys = 'جنت تجري من تحتها الانهر'.split(' ');
+    expect(findKeySequence(real('3:15'), keys)).toEqual({ ayahId: '3:15', startWord: 9, endWord: 13 });
+    expect(findKeySequence(real('2:2'), keys)).toBeNull();
   });
 
   it('ignores pause marks and normalises alef forms only for comparison', () => {
