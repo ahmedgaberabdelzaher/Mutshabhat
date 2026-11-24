@@ -23,6 +23,13 @@ export type ReviewMeta = {
 
 export type SourceName = 'quranpedia' | 'waqar144' | 'hifzlink';
 
+/**
+ * MVP scope is verbal (lafzi) mutashabihat. `semantic` marks pairs/groups with little shared wording
+ * (similar meaning or theme). They stay in the review dataset behind a filter and must never reach
+ * beta/production. See docs/DATA_MODEL.md for the classification rule.
+ */
+export type SimilarityType = 'lafzi' | 'semantic';
+
 export type WordRange = {
   ayahId: AyahId;
   startWord: number; // inclusive, index into Ayah.words
@@ -53,6 +60,8 @@ export type MutashabihGroup = {
   sourceCategory?: string;
   /** Waqar144 `ctx`: show part of the following ayah for context. */
   showNextAyahContext?: boolean;
+  /** Group-level classification: lafzi if at least one of its pairs is lafzi. Beta/production require 'lafzi'. */
+  similarityType?: SimilarityType;
 };
 
 /** Highlight rule for one pair of members (QMT-26). Stored in data so the committee can edit it without a rebuild. */
@@ -65,6 +74,8 @@ export type HighlightRule = {
   /** Optional letter-level ranges: [ayahId, wordIndex, startChar, endChar] inside a highlighted word (UTF-16 offsets, inclusive start / exclusive end). */
   letterRanges?: { ayahId: AyahId; word: number; start: number; end: number }[];
   granularity: 'word' | 'letter' | 'none';
+  /** Pair-level classification; overrides the group's similarityType for this pair. */
+  similarityType?: SimilarityType;
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */
   source: 'auto_diff' | 'committee';
   algorithm?: string;
@@ -94,6 +105,11 @@ export const STATUS_LABELS: Record<ReviewStatus, string> = {
   under_review: 'قيد المراجعة',
   approved: 'معتمد',
   rejected: 'مرفوض',
+};
+
+export const SIMILARITY_LABELS: Record<SimilarityType, string> = {
+  lafzi: 'متشابه لفظي',
+  semantic: 'تشابه معنوي',
 };
 
 export const SOURCE_LABELS: Record<SourceName, string> = {
