@@ -4,9 +4,16 @@ process.env.EXPO_PUBLIC_APP_FLAVOR = 'production';
 const { renderRouter } = require('expo-router/testing-library');
 const SurahPicker = require('@/app/browse/surah/index').default;
 const SurahPositions = require('@/app/browse/surah/[surah]').default;
+const JuzPicker = require('@/app/browse/juz/index').default;
+const JuzPositions = require('@/app/browse/juz/[juz]').default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-const routes = { 'browse/surah/index': SurahPicker, 'browse/surah/[surah]': SurahPositions };
+const routes = {
+  'browse/surah/index': SurahPicker,
+  'browse/surah/[surah]': SurahPositions,
+  'browse/juz/index': JuzPicker,
+  'browse/juz/[juz]': JuzPositions,
+};
 
 describe('browse by surah — production build (QMT-30)', () => {
   it('shows approved positions only (none yet) and no candidate record', async () => {
@@ -14,5 +21,13 @@ describe('browse by surah — production build (QMT-30)', () => {
     expect(screen.getByTestId('no-positions')).toHaveTextContent('لا توجد مواضع معتمدة هنا بعد.');
     expect(screen.queryByText('مسوّدة')).toBeNull();
     expect(screen.queryByText('قيد المراجعة')).toBeNull();
+  });
+});
+
+describe('browse by juz — production build (QMT-31)', () => {
+  it('shows approved positions only (none yet)', async () => {
+    const screen = await renderRouter(routes, { initialUrl: '/browse/juz/1' });
+    expect(screen.getByTestId('no-positions')).toBeTruthy();
+    expect(screen.queryByText('مسوّدة')).toBeNull();
   });
 });

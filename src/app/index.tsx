@@ -43,6 +43,7 @@ export default function HomeScreen() {
       </Card>
       <Title>تصفّح المواضع</Title>
       <LinkRow href="/browse/surah" title="بالسورة" subtitle="مواضع المتشابهات في سورة" testID="browse-surah" />
+      <LinkRow href="/browse/juz" title="بالجزء" subtitle="مواضع المتشابهات في جزء" testID="browse-juz" />
       <LinkRow href="/records" title="سجلات المتشابهات" subtitle="كل سجل مع حالته ومصدره" testID="records-link" />
       <LinkRow href="/quran" title="فهرس السور" subtitle="تصفّح نص المصحف سورةً سورة" />
       <LinkRow href="/sources" title="المصادر والإسناد" subtitle="تنزيل (CC BY 3.0) ومصادر المتشابهات والخط" testID="sources-link" />

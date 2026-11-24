@@ -4,9 +4,16 @@ process.env.EXPO_PUBLIC_APP_FLAVOR = 'review';
 const { renderRouter } = require('expo-router/testing-library');
 const SurahPicker = require('@/app/browse/surah/index').default;
 const SurahPositions = require('@/app/browse/surah/[surah]').default;
+const JuzPicker = require('@/app/browse/juz/index').default;
+const JuzPositions = require('@/app/browse/juz/[juz]').default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-const routes = { 'browse/surah/index': SurahPicker, 'browse/surah/[surah]': SurahPositions };
+const routes = {
+  'browse/surah/index': SurahPicker,
+  'browse/surah/[surah]': SurahPositions,
+  'browse/juz/index': JuzPicker,
+  'browse/juz/[juz]': JuzPositions,
+};
 
 describe('browse by surah — review build (QMT-30)', () => {
   it('lists the 114 surahs with Arabic names', async () => {
@@ -24,5 +31,22 @@ describe('browse by surah — review build (QMT-30)', () => {
     const ayahNos = ids.map((id: string) => Number(id.split(':')[1]));
     expect(ids.every((id: string) => id.startsWith('position-27:'))).toBe(true);
     expect([...ayahNos].sort((a, b) => a - b)).toEqual(ayahNos);
+  });
+});
+
+describe('browse by juz — review build (QMT-31)', () => {
+  it('lists the 30 juz', async () => {
+    const screen = await renderRouter(routes, { initialUrl: '/browse/juz' });
+    expect(screen.getByTestId('juz-1')).toHaveTextContent(/الجزء ١/);
+    expect(screen.getByTestId('juz-2')).toHaveTextContent(/البقرة ١٤٢/);
+  });
+
+  it('shows only positions inside the chosen juz, with status badges', async () => {
+    const { getQuranRepository } = require('@/data'); // eslint-disable-line @typescript-eslint/no-require-imports
+    const screen = await renderRouter(routes, { initialUrl: '/browse/juz/30' });
+    const ids = screen.getAllByTestId(/^position-/).map((n: { props: { testID: string } }) => n.props.testID.slice(9));
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids.every((id: string) => getQuranRepository().getAyah(id).juz === 30)).toBe(true);
+    expect(screen.queryAllByText(/مسوّدة|قيد المراجعة/).length).toBeGreaterThan(0);
   });
 });
