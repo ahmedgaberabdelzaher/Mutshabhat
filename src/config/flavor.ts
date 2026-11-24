@@ -1,4 +1,4 @@
-import type { ReviewStatus } from '@/domain/mutashabihat';
+import type { ReviewStatus, SimilarityType } from '@/domain/mutashabihat';
 
 /**
  * Build flavor (QMT-48). Set at build/bundle time through EXPO_PUBLIC_APP_FLAVOR
@@ -20,6 +20,10 @@ export type VisibilityPolicy = {
   flavor: AppFlavor;
   dataset: 'review' | 'production';
   visibleStatuses: readonly ReviewStatus[];
+  /** Similarity types this build may show at all. */
+  allowedSimilarity: readonly SimilarityType[];
+  /** Beta/production: a record must be explicitly tagged lafzi to be shown. */
+  requireExplicitLafzi: boolean;
   showStatusBadge: boolean;
 };
 
@@ -28,13 +32,23 @@ export function visibilityFor(flavor: AppFlavor): VisibilityPolicy {
     return {
       flavor,
       dataset: 'review',
-      // Candidate records (draft / under_review). Approved ones may appear once the committee starts;
-      // rejected records are never shown.
+      // Candidate records (draft / under_review) plus approved ones, so the committee can revisit
+      // what it approved (PO decision). Rejected records are never shown.
       visibleStatuses: ['draft', 'under_review', 'approved'],
+      // Semantic pairs stay in the review build, hidden from the default view (filter only).
+      allowedSimilarity: ['lafzi', 'semantic'],
+      requireExplicitLafzi: false,
       showStatusBadge: true,
     };
   }
-  return { flavor, dataset: 'production', visibleStatuses: ['approved'], showStatusBadge: false };
+  return {
+    flavor,
+    dataset: 'production',
+    visibleStatuses: ['approved'],
+    allowedSimilarity: ['lafzi'],
+    requireExplicitLafzi: true,
+    showStatusBadge: false,
+  };
 }
 
 export const FLAVOR_LABELS: Record<AppFlavor, string> = {
