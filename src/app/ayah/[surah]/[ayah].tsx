@@ -1,6 +1,7 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AnaloguesSection } from '@/components/analogues-section';
 import { AyahText } from '@/components/ayah-text';
 import { Card, LinkRow, Muted, Screen, Title } from '@/components/ui';
 import { colors, spacing } from '@/config/theme';
@@ -36,6 +37,8 @@ export default function AyahScreen() {
         <AyahText ayah={ayah} size="large" testID="ayah-text" />
         <Muted>{`الجزء ${toArabicDigits(ayah.juz)} · الصفحة ${toArabicDigits(ayah.page)} (مصحف المدينة)`}</Muted>
       </Card>
+
+      <AnaloguesSection key={ayah.id} ayahId={ayah.id} />
 
       <Link href="/sources" style={styles.attribution} testID="ayah-attribution">
         النص من مشروع تنزيل (tanzil.net)، برخصة CC BY 3.0، كما هو من غير تعديل · المصادر

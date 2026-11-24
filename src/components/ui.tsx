@@ -22,8 +22,12 @@ export function Title({ children }: { children: ReactNode }) {
   return <Text style={styles.title}>{children}</Text>;
 }
 
-export function Muted({ children }: { children: ReactNode }) {
-  return <Text style={styles.muted}>{children}</Text>;
+export function Muted({ children, testID }: { children: ReactNode; testID?: string }) {
+  return (
+    <Text style={styles.muted} testID={testID}>
+      {children}
+    </Text>
+  );
 }
 
 export function Body({ children }: { children: ReactNode }) {
