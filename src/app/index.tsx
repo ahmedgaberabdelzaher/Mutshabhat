@@ -1,98 +1,60 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { StyleSheet, Text, TextInput } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { Button, Card, LinkRow, Muted, Screen, Title } from '@/components/ui';
+import { colors, spacing } from '@/config/theme';
+import { getQuranRepository } from '@/data';
+import { parseAyahInput } from '@/lib/parse-ayah-input';
 
 export default function HomeScreen() {
+  const [input, setInput] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const go = () => {
+    const id = parseAyahInput(input);
+    const ayah = id ? getQuranRepository().getAyah(id) : undefined;
+    if (!ayah) {
+      setError('اكتب رقم السورة ثم رقم الآية، مثل ٢:٢٥٥');
+      return;
+    }
+    setError(null);
+    router.push({ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(ayah.surah), ayah: String(ayah.ayah) } });
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <Screen>
+      <Card>
+        <Title>انتقل إلى آية</Title>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={go}
+          placeholder="السورة:الآية — مثل ٢:٢٥٥"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numbers-and-punctuation"
+          style={styles.input}
+          testID="ayah-input"
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button label="فتح الآية" onPress={go} testID="open-ayah" />
+      </Card>
+      <LinkRow href="/quran" title="فهرس السور" subtitle="تصفّح نص المصحف سورةً سورة" />
+      <Muted>نص المصحف من مشروع تنزيل (tanzil.net) برخصة CC BY 3.0، من غير أي تعديل.</Muted>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 18,
+    color: colors.text,
+    textAlign: 'right',
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  error: { color: colors.rejected },
 });
