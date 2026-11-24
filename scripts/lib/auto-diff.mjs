@@ -7,9 +7,9 @@
  * Semantic pairs get a rule with no ranges (granularity none) so the classification is stored as data.
  * Groups are tagged in place: lafzi if at least one of their pairs is lafzi, else semantic.
  */
-import { diffPair, similarityOf } from '../../src/domain/diff.ts';
+import { diffPair, phraseDiff, similarityOf } from '../../src/domain/diff.ts';
 
-export const ALGORITHM = 'auto_diff/lcs-word-v1: LCS on letter-only word keys (diacritics, Quranic marks and alef forms ignored for matching); letter ranges for diacritic-only or 1:1 similar-word substitutions';
+export const ALGORITHM = 'auto_diff/lcs-word-v1: LCS on letter-only word keys (diacritics, Quranic marks and alef forms ignored for matching); letter ranges for diacritic-only or 1:1 similar-word substitutions; auto_diff/phrase-anchor-v1 (method=phrase): low-overlap pairs sharing a contiguous phrase of >= 3 words are lafzi, highlighted in the 2 words around each shared phrase';
 
 export function buildHighlightRules(groups, quranSurahs) {
   const words = (id) => {
@@ -30,8 +30,11 @@ export function buildHighlightRules(groups, quranSurahs) {
         if (x.ayahId === y.ayahId) continue;
         const key = `${x.ayahId}|${y.ayahId}`;
         if (rules.has(key)) continue; // first group wins (HifzLink groups are listed first)
-        const d = diffPair(side(x), side(y));
-        const similarityType = similarityOf(d);
+        const whole = diffPair(side(x), side(y));
+        const similarityType = similarityOf(whole);
+        // Low overall overlap but a shared phrase of ≥ 3 words: lafzi, highlighted around the phrase.
+        const method = similarityType === 'semantic' ? undefined : whole.confidence === 'low' ? 'phrase' : 'lcs';
+        const d = method === 'phrase' ? phraseDiff(side(x), side(y)) : whole;
         const rule = {
           id: `auto:${key}`,
           pair: [x.ayahId, y.ayahId],
@@ -40,7 +43,9 @@ export function buildHighlightRules(groups, quranSurahs) {
           granularity: d.granularity,
           similarityType,
           source: 'auto_diff',
-          algorithm: 'lcs-word-v1',
+          algorithm: method === 'phrase' ? 'phrase-anchor-v1' : 'lcs-word-v1',
+          ...(method ? { method } : {}),
+          ...(method === 'phrase' ? { phrases: d.phrases } : {}),
           confidence: d.confidence,
           matchRatio: d.matchRatio,
           status: 'draft',

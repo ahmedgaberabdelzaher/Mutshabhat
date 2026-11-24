@@ -31,7 +31,8 @@ Review dataset statuses in Sprint 1:
 The MVP covers **verbal (لفظي) mutashabihat** only. Every pair and group carries `similarityType`:
 
 - `lafzi` — the two ayahs share most of their wording and differ in a few words/letters.
-- `semantic` — little shared wording (similar meaning / theme). Kept in the review dataset for the committee, **hidden from the default view** (records list, ayah analogues, browse positions) and listed only when the reviewer picks «تشابه معنوي» in the similarity filter. In the review build they show «لا يوجد موضع اختلاف محدد» because no word-level highlight applies.
+- `semantic` — little shared wording and no shared phrase of ≥ 3 consecutive words (similar meaning / theme). Kept in the review dataset for the committee, **hidden from the default view** (records list, ayah analogues, browse positions) and listed only when the reviewer picks «تشابه معنوي» in the similarity filter. In the review build they show «لا يتوفر تحديد دقيق لموضع الاختلاف» because no word-level highlight applies.
+- **Committee pilot exception (review build only):** all 285 HifzLink pilot pairs are listed in the default view whatever their type, each with a type badge (لفظي / معنوي). Every analogue and record in the review build carries this badge.
 
 Where it lives: `highlightRules[].similarityType` (pair level, authoritative) and `groups[].similarityType` (group level: `lafzi` if at least one pair is lafzi). A pair without a rule inherits its group's type. The classification rule itself is defined with the auto-diff (QMT-26) further down / in `scripts/lib/auto-diff.mjs`.
 
@@ -76,7 +77,9 @@ Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pai
   "similarityType": "lafzi",      // lafzi | semantic (see classification rule below)
   "source": "auto_diff",          // or "committee"
   "algorithm": "lcs-word-v1",
-  "confidence": "medium",         // high | medium | low (low ⇔ semantic) — persisted uncertainty
+  "method": "lcs",                // lcs | phrase (lafzi rules only)
+  "phrases": [ … ],               // method=phrase only: [{ a: WordRange[], b: WordRange[], length }]
+  "confidence": "medium",         // high | medium | low (low = little overall overlap: semantic, or lafzi via phrase) — persisted uncertainty
   "matchRatio": 0.14,
   "type": "إبدال",                 // relative to pair[0]; only when the pattern is unambiguous
   "status": "draft",
@@ -86,14 +89,16 @@ Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pai
 
 - Word indexes refer to Tanzil tokens (`text.split(' ')`); the app renders spans over the unchanged string (`src/domain/highlight.ts`), and a test re-joins every rule's segments to the exact text.
 - `npm run build:mutashabihat` regenerates auto rules with `src/domain/diff.ts`: word LCS on letter-only keys (diacritics, Quranic marks and alef forms ignored for matching), differences inside the aligned region plus edge substitutions, letter ranges for diacritic-only differences and 1↔1 similar-word substitutions.
-- **Classification rule (lafzi vs semantic)** — `similarityOf()` in `src/domain/diff.ts`. Words are compared by letter-only keys (diacritics, Quranic marks, alef forms ignored) and aligned by word LCS. A pair is **`semantic`** when the shared wording is small:
-  1. no shared word, or
-  2. exactly one shared word while the shorter side has more than 4 words, or
-  3. shared (LCS) words < 30% of the shorter side's words.
+- **Classification rule (lafzi vs semantic)** — `similarityOf()` in `src/domain/diff.ts`. Words are compared by letter-only keys (diacritics, Quranic marks, alef forms ignored). A pair is **`semantic`** only when BOTH hold:
+  1. little shared wording by word LCS: no shared word, or exactly one shared word while the shorter side has more than 4 words, or shared words < 30% of the shorter side's words; **and**
+  2. no shared contiguous phrase of **≥ 3 consecutive words** (`MIN_PHRASE`).
 
-  Everything else is **`lafzi`**. Semantic pairs get a rule with `similarityType: "semantic"`, `confidence: "low"`, `granularity: "none"` and no ranges (no false precision); the review build shows «تشابه معنوي … لا يتوفر تحديد دقيق لموضع الاختلاف». A group is `lafzi` if at least one of its pairs is lafzi, else `semantic`. The committee can reclassify a pair by editing `similarityType` on its rule (data change, OTA).
-- Counts in review dataset v1 (6,830 pairs): **3,063 lafzi / 3,767 semantic** pairs; groups 2,476 lafzi / 452 semantic (HifzLink pilot 253 / 32). Per source (a pair counted under every source listing it): HifzLink 253/32, Waqar144 1,095/393, Quranpedia 2,476/3,511.
-- Known limit: 916 semantic pairs still share a run of ≥ 3 consecutive words inside long ayahs (phrase-level similarity, e.g. 2:25 ~ 3:15 «جنات تجري من تحتها الأنهار»). The rule keeps them semantic because the diff cannot place the difference precisely; a phrase-anchored diff could move them to lafzi later (PO decision).
+  Everything else is **`lafzi`**, generated by one of two methods (both `source: "auto_diff"`, `status: "draft"`):
+  - `method: "lcs"` (`algorithm: lcs-word-v1`) — enough overall overlap: whole-ayah word LCS as above.
+  - `method: "phrase"` (`algorithm: phrase-anchor-v1`, `phraseDiff()`) — low overall overlap but a shared phrase of ≥ 3 words. It locates up to 3 shared phrases (longest first, non-overlapping), stores them in `phrases`, highlights diacritic-only differences inside each phrase at letter level, and compares the **2 words before and after** each phrase on both sides: words that don't match there are highlighted (letter ranges too for a 1↔1 similar-word substitution). The rest of each ayah is context and is not highlighted. Example 2:25 ~ 3:15: shared «جَنَّٰتٍ/جَنَّٰتٌ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ»; highlighted «أَنَّ لَهُمْ» / «عِندَ رَبِّهِمْ» before and «كُلَّمَا رُزِقُوا۟» / «خَٰلِدِينَ فِيهَا» after, and the case ending of جنات at letter level.
+
+  Semantic pairs get a rule with `similarityType: "semantic"`, `confidence: "low"`, no `method`, `granularity: "none"` and no ranges (no false precision); the review build shows «تشابه معنوي … لا يتوفر تحديد دقيق لموضع الاختلاف». A group is `lafzi` if at least one of its pairs is lafzi, else `semantic`. The committee can reclassify a pair by editing `similarityType` on its rule (data change, OTA).
+- Counts in review dataset v1 (6,830 pairs): **3,982 lafzi** (3,063 `lcs` + 919 `phrase`) / **2,848 semantic** pairs; groups 2,684 lafzi / 244 semantic. Pairs per source (a pair counted under every source listing it): HifzLink 256 / 29, Waqar144 1,246 / 242, Quranpedia 3,314 / 2,673. Groups per source: HifzLink 256 / 29, Waqar144 1,285 / 63, Quranpedia 1,143 / 152. HifzLink pilot pairs: 256 lafzi (253 lcs + 3 phrase) / 29 semantic — all 285 visible by default in the review build.
 - Group members keep `differenceRanges: []` because no licensed source provides ranges; pairwise ranges live in `highlightRules`.
 - The committee corrects a rule by editing its ranges (→ `source: "committee"`, version + 1, status per the lifecycle). Shipping the edited JSON is an OTA update — no app rebuild.
 - Beta/production only use rules whose status is `approved`.

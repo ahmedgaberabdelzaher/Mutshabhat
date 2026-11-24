@@ -68,17 +68,49 @@ describe('bundled datasets (QMT-48 AC2)', () => {
   it('classifies every pair and group as lafzi or semantic (PO: MVP = lafzi)', () => {
     for (const r of review.highlightRules) {
       expect(['lafzi', 'semantic']).toContain(r.similarityType);
-      // Rule: semantic ⇔ the auto diff found little shared wording (confidence low) ⇒ no ranges.
-      expect(r.similarityType === 'semantic').toBe(r.confidence === 'low');
+      // Rule: semantic ⇔ little shared wording (confidence low) AND no shared phrase of ≥ 3 words ⇒ no ranges.
+      // Low-overlap pairs WITH such a phrase are lafzi, method=phrase.
       if (r.similarityType === 'semantic') {
+        expect(r.confidence).toBe('low');
+        expect(r.method).toBeUndefined();
         expect(r.ranges).toEqual([]);
         expect(r.granularity).toBe('none');
+      } else {
+        expect(r.method).toBe(r.confidence === 'low' ? 'phrase' : 'lcs');
+      }
+      if (r.method === 'phrase') {
+        expect(r.algorithm).toBe('phrase-anchor-v1');
+        expect(r.phrases!.length).toBeGreaterThan(0);
+        for (const p of r.phrases!) {
+          expect(p.length).toBeGreaterThanOrEqual(3);
+          for (const range of [...p.a, ...p.b]) {
+            expect(range.endWord).toBeLessThan(quran.getAyah(range.ayahId)!.words.length);
+          }
+        }
       }
     }
+    // Phrase pairs that formerly had no rule are now lafzi with ranges around the shared phrase.
+    const phrase = review.highlightRules.filter((r) => r.method === 'phrase');
+    expect(phrase.length).toBeGreaterThan(800);
+    expect(phrase.filter((r) => r.ranges.length > 0).length / phrase.length).toBeGreaterThan(0.9);
     for (const g of review.groups) expect(['lafzi', 'semantic']).toContain(g.similarityType);
     const count = (t: string) => review.highlightRules.filter((r) => r.similarityType === t).length;
     expect(count('lafzi')).toBeGreaterThan(1000);
     expect(count('semantic')).toBeGreaterThan(1000);
+  });
+
+  it('review build lists all 285 HifzLink pilot pairs in the default view, whatever their type', () => {
+    const repo = new LocalMutashabihatRepository(review, visibilityFor('review'), (id) => quran.absoluteIndex(id));
+    const pilot = review.groups.filter((g) => g.pilot);
+    expect(pilot).toHaveLength(285);
+    expect(pilot.some((g) => g.similarityType === 'semantic')).toBe(true);
+    expect(repo.getGroups('all').filter((g) => g.pilot)).toHaveLength(285); // default filter = lafzi
+    for (const g of pilot) {
+      const [a, b] = g.members.map((m) => m.ayahId);
+      const found = repo.getAnalogues(a).find((x) => x.ayahId === b);
+      expect(found?.pilot).toBe(true);
+      expect(['lafzi', 'semantic']).toContain(found?.similarityType);
+    }
   });
 
   it('semantic pairs never reach beta/production — even if the whole review set were approved', () => {

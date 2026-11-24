@@ -5,11 +5,11 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FlavorBanner } from '@/components/flavor-banner';
 import { ScopeToggle } from '@/components/scope-toggle';
 import { SimilarityToggle } from '@/components/similarity-toggle';
-import { StatusBadge, Tag } from '@/components/status-badge';
+import { SimilarityBadge, StatusBadge, Tag } from '@/components/status-badge';
 import { Muted } from '@/components/ui';
 import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Scope } from '@/data';
-import { SIMILARITY_LABELS, SOURCE_LABELS, type MutashabihGroup, type SimilarityType } from '@/domain/mutashabihat';
+import { SOURCE_LABELS, type MutashabihGroup, type SimilarityType } from '@/domain/mutashabihat';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 function refLabel(id: string) {
@@ -57,7 +57,9 @@ function RecordRow({ group, showBadge }: { group: MutashabihGroup; showBadge: bo
           {showBadge ? <StatusBadge status={group.status} testID={`status-${group.id}`} /> : null}
           <Tag label={SOURCE_LABELS[group.source.name]} />
           {group.pilot ? <Tag label="عيّنة اللجنة" /> : null}
-          {group.similarityType === 'semantic' ? <Tag label={SIMILARITY_LABELS.semantic} /> : null}
+          {showBadge ? (
+            <SimilarityBadge type={group.similarityType ?? 'lafzi'} testID={`type-${group.id}`} />
+          ) : null}
         </View>
         <Text style={styles.refs}>{group.members.map((m) => refLabel(m.ayahId)).join(' · ')}</Text>
         {group.note ? (

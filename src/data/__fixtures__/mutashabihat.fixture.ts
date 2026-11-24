@@ -51,7 +51,7 @@ export const productionFixture: MutashabihatDataset = {
     group('p-review', ['2:2', '27:2'], 'under_review', 'hifzlink', { pilot: true }),
     group('p-rejected', ['2:2', '2:5'], 'rejected'),
     // Semantic pairs must never reach beta/production, even if approved:
-    group('p-semantic', ['2:2', '2:255'], 'approved', 'quranpedia', { similarityType: 'semantic' }),
+    group('p-semantic', ['2:2', '2:255'], 'approved', 'hifzlink', { similarityType: 'semantic', pilot: true }),
     group('p-untagged', ['3:1', '29:1'], 'approved', 'quranpedia'), // unclassified ⇒ hidden
     // Lafzi group whose pair 3:2~2:255 is tagged semantic by its rule ⇒ only 3:2~3:3 shows.
     group('p-mixed', ['3:2', '3:3', '2:255'], 'approved', 'waqar144', { similarityType: 'lafzi' }),

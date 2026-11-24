@@ -1,5 +1,5 @@
 import { parseFlavor, visibilityFor } from '@/config/flavor';
-import { productionFixture, reviewFixture, rule } from '@/data/__fixtures__/mutashabihat.fixture';
+import { group, productionFixture, reviewFixture, rule } from '@/data/__fixtures__/mutashabihat.fixture';
 import { DatasetPolicyError, LocalMutashabihatRepository } from '@/data/mutashabihat-repository';
 import { getQuranRepository } from '@/data';
 
@@ -63,6 +63,27 @@ describe('review build (QMT-48 AC4, QMT-25 AC3)', () => {
   });
 });
 
+describe('review build — committee pilot pairs (PO decision)', () => {
+  const withPilotSemantic = {
+    ...reviewFixture,
+    groups: [
+      ...reviewFixture.groups,
+      group('g-pilot-semantic', ['3:1', '29:1'], 'under_review', 'hifzlink', { pilot: true, similarityType: 'semantic' as const }),
+    ],
+  };
+  const repo = new LocalMutashabihatRepository(withPilotSemantic, visibilityFor('review'), pos);
+
+  it('lists a semantic pilot pair in the default view, typed semantic', () => {
+    expect(repo.getAnalogues('3:1').map((a) => [a.ayahId, a.pilot, a.similarityType])).toEqual([['29:1', true, 'semantic']]);
+    expect(repo.getGroups().map((g) => g.id)).toContain('g-pilot-semantic');
+    expect(repo.getPositionAyahIds()).toEqual(expect.arrayContaining(['3:1', '29:1']));
+  });
+
+  it('non-pilot semantic pairs stay behind the filter', () => {
+    expect(repo.getAnalogues('2:2').map((a) => a.ayahId)).not.toContain('2:255');
+  });
+});
+
 describe('beta / production builds (QMT-48 AC2, QMT-25 AC1/2/4, DAT-06)', () => {
   for (const flavor of ['beta', 'production'] as const) {
     const repo = new LocalMutashabihatRepository(productionFixture, visibilityFor(flavor), pos);
@@ -86,6 +107,8 @@ describe('beta / production builds (QMT-48 AC2, QMT-25 AC1/2/4, DAT-06)', () => 
         expect(repo.getPositionAyahIds('all', filter)).not.toContain('2:2');
       }
       expect(repo.getHighlightRule('3:2', '2:255')).toBeUndefined();
+      // p-semantic is an approved HifzLink PILOT group: the review-only pilot rule must not apply here.
+      expect(repo.getGroups('all', 'lafzi').map((g) => g.id)).not.toContain('p-semantic');
       expect(repo.getDatasetInfo().similarityCounts.semantic).toBe(0);
     });
 

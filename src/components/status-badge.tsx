@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/config/theme';
-import { STATUS_LABELS, type ReviewStatus } from '@/domain/mutashabihat';
+import { SIMILARITY_LABELS, STATUS_LABELS, type ReviewStatus, type SimilarityType } from '@/domain/mutashabihat';
 
 const PALETTE: Record<ReviewStatus, { fg: string; bg: string }> = {
   draft: { fg: colors.draft, bg: colors.draftBg },
@@ -19,6 +19,24 @@ export function StatusBadge({ status, testID }: { status: ReviewStatus; testID?:
       accessibilityLabel={`الحالة: ${STATUS_LABELS[status]}`}
       testID={testID}>
       <Text style={[styles.text, { color: p.fg }]}>{STATUS_LABELS[status]}</Text>
+    </View>
+  );
+}
+
+const SIMILARITY_PALETTE: Record<SimilarityType, { fg: string; bg: string }> = {
+  lafzi: { fg: '#1F5F8B', bg: '#E6F0F7' },
+  semantic: { fg: '#7A4E9C', bg: '#F1EAF7' },
+};
+
+/** Similarity-type badge (لفظي / معنوي), shown in the review build. */
+export function SimilarityBadge({ type, testID }: { type: SimilarityType; testID?: string }) {
+  const p = SIMILARITY_PALETTE[type];
+  return (
+    <View
+      style={[styles.badge, { backgroundColor: p.bg, borderColor: p.fg }]}
+      accessibilityLabel={`النوع: ${SIMILARITY_LABELS[type]}`}
+      testID={testID}>
+      <Text style={[styles.text, { color: p.fg }]}>{SIMILARITY_LABELS[type]}</Text>
     </View>
   );
 }

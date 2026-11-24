@@ -124,6 +124,14 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
     return this.rules.get(pairKey(a, b))?.similarityType ?? group.similarityType ?? 'lafzi';
   }
 
+  /**
+   * PO decision: in the review build every committee pilot pair (285 HifzLink) is listed in the default
+   * view whatever its similarityType (with a type badge). Never applies to beta/production.
+   */
+  private pilotAlwaysVisible(pilot: boolean | undefined, f: SimilarityFilter): boolean {
+    return !!pilot && f === 'lafzi' && this.policy.allowedSimilarity.includes('semantic');
+  }
+
   private matches(t: SimilarityType | undefined, f: SimilarityFilter): boolean {
     return f === 'any' || (t ?? 'lafzi') === f;
   }
@@ -146,7 +154,10 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
   }
 
   getGroups(scope: Scope = 'all', similarity: SimilarityFilter = 'lafzi'): MutashabihGroup[] {
-    return this.groups.filter((g) => (scope !== 'pilot' || g.pilot) && this.matches(g.similarityType, similarity));
+    return this.groups.filter(
+      (g) =>
+        (scope !== 'pilot' || g.pilot) && (this.pilotAlwaysVisible(g.pilot, similarity) || this.matches(g.similarityType, similarity)),
+    );
   }
 
   getAnalogues(ayahId: AyahId, scope: Scope = 'all', similarity: SimilarityFilter = 'lafzi'): Analogue[] {
@@ -172,7 +183,7 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
       const primarySelf = primary.members.find((m) => spanOf(m).includes(ayahId))!;
       const similarityType = this.pairSimilarity(primarySelf.ayahId, id, primary);
       if (!this.policy.allowedSimilarity.includes(similarityType)) continue; // never semantic in beta/production
-      if (!this.matches(similarityType, similarity)) continue;
+      if (!this.pilotAlwaysVisible(pilot, similarity) && !this.matches(similarityType, similarity)) continue;
       analogues.push({
         ayahId: id,
         ayahIds: spanOf(primaryMember),
