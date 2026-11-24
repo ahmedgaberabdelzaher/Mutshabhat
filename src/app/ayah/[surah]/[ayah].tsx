@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AyahText } from '@/components/ayah-text';
@@ -37,7 +37,9 @@ export default function AyahScreen() {
         <Muted>{`الجزء ${toArabicDigits(ayah.juz)} · الصفحة ${toArabicDigits(ayah.page)} (مصحف المدينة)`}</Muted>
       </Card>
 
-      <Muted>النص من مشروع تنزيل (tanzil.net)، برخصة CC BY 3.0، كما هو من غير تعديل.</Muted>
+      <Link href="/sources" style={styles.attribution} testID="ayah-attribution">
+        النص من مشروع تنزيل (tanzil.net)، برخصة CC BY 3.0، كما هو من غير تعديل · المصادر
+      </Link>
 
       <View style={styles.nav}>
         {next ? (
@@ -68,4 +70,5 @@ const styles = StyleSheet.create({
   ayahNo: { fontSize: 16, color: colors.primary, fontWeight: '700' },
   nav: { gap: spacing.sm },
   navItem: {},
+  attribution: { color: colors.primary, fontSize: 14, textDecorationLine: 'underline' },
 });
