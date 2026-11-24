@@ -22,6 +22,13 @@ describe('positions per division (QMT-30/31/32)', () => {
     expect(repo.getPositionsIn(quran.getAyahIdsInJuz(2))).toEqual([]);
   });
 
+  it('page: approved positions on the chosen Madinah page only', () => {
+    const repo = new LocalMutashabihatRepository(productionFixture, visibilityFor('production'), pos);
+    expect(repo.getPositionsIn(quran.getAyahIdsOnPage(2)).map((p) => p.ayahId)).toEqual(['2:5']);
+    expect(repo.getPositionsIn(quran.getAyahIdsOnPage(411)).map((p) => p.ayahId)).toEqual(['31:5']);
+    expect(repo.getPositionsIn(quran.getAyahIdsOnPage(3))).toEqual([]);
+  });
+
   it('review: candidate positions with their statuses, limited to the division', () => {
     const repo = new LocalMutashabihatRepository(reviewFixture, visibilityFor('review'), pos);
     const inSurah2 = repo.getPositionsIn(surahIds(2));

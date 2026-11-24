@@ -47,6 +47,8 @@ export default function RootLayout() {
         <Stack.Screen name="browse/surah/[surah]" options={{ title: 'مواضع السورة' }} />
         <Stack.Screen name="browse/juz/index" options={{ title: 'التصفح بالجزء' }} />
         <Stack.Screen name="browse/juz/[juz]" options={{ title: 'مواضع الجزء' }} />
+        <Stack.Screen name="browse/page/index" options={{ title: 'التصفح بالصفحة' }} />
+        <Stack.Screen name="browse/page/[page]" options={{ title: 'مواضع الصفحة' }} />
       </Stack>
     </>
   );

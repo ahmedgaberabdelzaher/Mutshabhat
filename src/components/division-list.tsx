@@ -1,4 +1,5 @@
 import type { Href } from 'expo-router';
+import type { ReactElement } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
 import { LinkRow } from '@/components/ui';
@@ -8,7 +9,15 @@ import { toArabicDigits } from '@/lib/arabic-digits';
 export type Division = { key: string; title: string; subtitle?: string; count: number; href: Href };
 
 /** Picker list for surahs / juz / pages with the number of visible positions in each. */
-export function DivisionList({ items, testIDPrefix }: { items: Division[]; testIDPrefix: string }) {
+export function DivisionList({
+  items,
+  testIDPrefix,
+  header,
+}: {
+  items: Division[];
+  testIDPrefix: string;
+  header?: ReactElement;
+}) {
   return (
     <FlatList
       style={styles.list}
@@ -16,6 +25,7 @@ export function DivisionList({ items, testIDPrefix }: { items: Division[]; testI
       data={items}
       keyExtractor={(d) => d.key}
       initialNumToRender={20}
+      ListHeaderComponent={header}
       renderItem={({ item }) => (
         <LinkRow
           href={item.href}
