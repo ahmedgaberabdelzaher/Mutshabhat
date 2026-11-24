@@ -41,6 +41,7 @@ export default function RootLayout() {
         <Stack.Screen name="quran/index" options={{ title: 'فهرس السور' }} />
         <Stack.Screen name="quran/[surah]" options={{ title: 'السورة' }} />
         <Stack.Screen name="ayah/[surah]/[ayah]" options={{ title: 'الآية' }} />
+        <Stack.Screen name="sources" options={{ title: 'المصادر والإسناد' }} />
       </Stack>
     </>
   );

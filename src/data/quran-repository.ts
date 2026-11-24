@@ -3,7 +3,7 @@ import { makeAyahId, parseAyahId, tokenize } from '@/domain/quran';
 
 /** Read-only access to the Quran text and Tanzil metadata. Screens depend on this interface only. */
 export interface QuranRepository {
-  readonly sourceInfo: { source: string; license: string; sha256: string };
+  readonly sourceInfo: { source: string; license: string; sha256: string; notice: string };
   getSurahs(): Surah[];
   getSurah(index: number): Surah | undefined;
   getAyah(id: AyahId): Ayah | undefined;
@@ -22,6 +22,7 @@ export type QuranTextFile = {
   source: string;
   license: string;
   sourceSha256: string;
+  notice: string;
   surahs: string[][];
 };
 
@@ -55,7 +56,7 @@ export class LocalQuranRepository implements QuranRepository {
     private readonly text: QuranTextFile,
     private readonly meta: QuranMetaFile,
   ) {
-    this.sourceInfo = { source: text.source, license: text.license, sha256: text.sourceSha256 };
+    this.sourceInfo = { source: text.source, license: text.license, sha256: text.sourceSha256, notice: text.notice };
     this.surahStart = meta.surahs.map((s) => s.start);
     this.total = meta.surahs.reduce((n, s) => n + s.ayahCount, 0);
     this.juzStart = meta.juz.map((j) => this.absoluteIndex(makeAyahId(j.surah, j.ayah)));

@@ -40,6 +40,7 @@ export default function HomeScreen() {
         <Button label="فتح الآية" onPress={go} testID="open-ayah" />
       </Card>
       <LinkRow href="/quran" title="فهرس السور" subtitle="تصفّح نص المصحف سورةً سورة" />
+      <LinkRow href="/sources" title="المصادر والإسناد" subtitle="تنزيل (CC BY 3.0) ومصادر المتشابهات والخط" testID="sources-link" />
       <Muted>نص المصحف من مشروع تنزيل (tanzil.net) برخصة CC BY 3.0، من غير أي تعديل.</Muted>
     </Screen>
   );
