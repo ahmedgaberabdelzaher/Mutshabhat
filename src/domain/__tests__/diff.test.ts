@@ -1,4 +1,4 @@
-import { clusters, comparisonKey, diffPair, letterDiff, type Side } from '@/domain/diff';
+import { clusters, comparisonKey, diffPair, letterDiff, similarityOf, type Side } from '@/domain/diff';
 import { getQuranRepository } from '@/data';
 
 const side = (id: string, text: string): Side => [{ ayahId: id, words: text.split(' ') }];
@@ -61,6 +61,12 @@ describe('auto diff (QMT-26)', () => {
     expect(d.confidence).toBe('low');
     expect(d.granularity).toBe('none');
     expect(d.a.ranges).toEqual([]);
+    expect(similarityOf(d)).toBe('semantic');
+  });
+
+  it('classifies verbal pairs as lafzi', () => {
+    expect(similarityOf(diffPair(real('2:2'), real('27:2')))).toBe('lafzi');
+    expect(similarityOf(diffPair(real('2:5'), real('31:5')))).toBe('lafzi');
   });
 
   it('ignores pause marks and normalises alef forms only for comparison', () => {

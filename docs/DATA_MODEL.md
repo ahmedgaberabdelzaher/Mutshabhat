@@ -26,20 +26,35 @@ Review dataset statuses in Sprint 1:
 - 285 HifzLink curated pairs → `under_review`, `pilot: true`, `reviewCycle: "QMT-49"` (committee pilot set).
 - 1,348 Waqar144 entries and 1,295 de-duplicated Quranpedia groups → `draft`.
 
+## Similarity type: lafzi vs semantic
+
+The MVP covers **verbal (لفظي) mutashabihat** only. Every pair and group carries `similarityType`:
+
+- `lafzi` — the two ayahs share most of their wording and differ in a few words/letters.
+- `semantic` — little shared wording (similar meaning / theme). Kept in the review dataset for the committee, **hidden from the default view** (records list, ayah analogues, browse positions) and listed only when the reviewer picks «تشابه معنوي» in the similarity filter. In the review build they show «لا يوجد موضع اختلاف محدد» because no word-level highlight applies.
+
+Where it lives: `highlightRules[].similarityType` (pair level, authoritative) and `groups[].similarityType` (group level: `lafzi` if at least one pair is lafzi). A pair without a rule inherits its group's type. The classification rule itself is defined with the auto-diff (QMT-26) further down / in `scripts/lib/auto-diff.mjs`.
+
+Beta/production guarantees (tested in `mutashabihat-repository.test.ts`):
+
+1. A group must be **explicitly** `similarityType: "lafzi"` to be shown; untagged or `semantic` groups are dropped even if `approved`.
+2. Any rule tagged `semantic` (any status) blocks that pair, even inside a lafzi group.
+3. The `semantic` filter is not offered and returns nothing.
+
 ## Flavors
 
 `EXPO_PUBLIC_APP_FLAVOR` = `review` | `beta` | `production` (default **production**, the safe choice).
 
 | Flavor | Dataset | Visible statuses | Status badge | EAS Update channel | iOS / Android id |
 | --- | --- | --- | --- | --- | --- |
-| review | review | draft, under_review (approved if any) — never rejected | yes | `review` | `com.ahmedgaber.mutshabhat.review` |
+| review | review | draft, under_review **and approved** (so the committee can revisit approvals) — never rejected | yes | `review` | `com.ahmedgaber.mutshabhat.review` |
 | beta | production | approved | no | `beta` | `com.ahmedgaber.mutshabhat.beta` |
 | production | production | approved | no | `production` | `com.ahmedgaber.mutshabhat` |
 
 Defence in depth:
 
 1. **Bundle level** — `src/data/datasets.ts` only `require`s the review JSON when the bundle is built for `review`; Metro drops it from beta/production bundles. `npm run check:production-bundle` exports all three web bundles and fails if candidate data appears outside the review bundle.
-2. **Repository level** — `LocalMutashabihatRepository` refuses a dataset whose `kind` doesn't match the flavor and filters records by the flavor's visible statuses before anything reaches the UI.
+2. **Repository level** — `LocalMutashabihatRepository` refuses a dataset whose `kind` doesn't match the flavor and filters records by the flavor's visible statuses and allowed similarity types (beta/production: explicit `lafzi` only) before anything reaches the UI.
 
 ## Swapping data without a rebuild
 
@@ -57,10 +72,11 @@ Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pai
   "pair": ["2:2", "27:2"],
   "ranges": [{ "ayahId": "2:2", "startWord": 6, "endWord": 6 }, { "ayahId": "27:2", "startWord": 1, "endWord": 2 }],
   "letterRanges": [{ "ayahId": "…", "word": 3, "start": 5, "end": 7 }], // optional, UTF-16 offsets inside a word
-  "granularity": "word",          // word | letter | none (texts identical)
+  "granularity": "word",          // word | letter | none (identical texts, or a semantic pair)
+  "similarityType": "lafzi",      // lafzi | semantic (see classification rule below)
   "source": "auto_diff",          // or "committee"
   "algorithm": "lcs-word-v1",
-  "confidence": "medium",         // high | medium — persisted uncertainty
+  "confidence": "medium",         // high | medium | low (low ⇔ semantic) — persisted uncertainty
   "matchRatio": 0.14,
   "type": "إبدال",                 // relative to pair[0]; only when the pattern is unambiguous
   "status": "draft",
@@ -70,7 +86,14 @@ Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pai
 
 - Word indexes refer to Tanzil tokens (`text.split(' ')`); the app renders spans over the unchanged string (`src/domain/highlight.ts`), and a test re-joins every rule's segments to the exact text.
 - `npm run build:mutashabihat` regenerates auto rules with `src/domain/diff.ts`: word LCS on letter-only keys (diacritics, Quranic marks and alef forms ignored for matching), differences inside the aligned region plus edge substitutions, letter ranges for diacritic-only differences and 1↔1 similar-word substitutions.
-- Pairs with little shared wording (thematic similarity: < 30% overlap) get **no rule**; the app then says «لا يتوفر تحديد دقيق لموضع الاختلاف من البيانات المرخّصة المتاحة» instead of inventing precision.
+- **Classification rule (lafzi vs semantic)** — `similarityOf()` in `src/domain/diff.ts`. Words are compared by letter-only keys (diacritics, Quranic marks, alef forms ignored) and aligned by word LCS. A pair is **`semantic`** when the shared wording is small:
+  1. no shared word, or
+  2. exactly one shared word while the shorter side has more than 4 words, or
+  3. shared (LCS) words < 30% of the shorter side's words.
+
+  Everything else is **`lafzi`**. Semantic pairs get a rule with `similarityType: "semantic"`, `confidence: "low"`, `granularity: "none"` and no ranges (no false precision); the review build shows «تشابه معنوي … لا يتوفر تحديد دقيق لموضع الاختلاف». A group is `lafzi` if at least one of its pairs is lafzi, else `semantic`. The committee can reclassify a pair by editing `similarityType` on its rule (data change, OTA).
+- Counts in review dataset v1 (6,830 pairs): **3,063 lafzi / 3,767 semantic** pairs; groups 2,476 lafzi / 452 semantic (HifzLink pilot 253 / 32). Per source (a pair counted under every source listing it): HifzLink 253/32, Waqar144 1,095/393, Quranpedia 2,476/3,511.
+- Known limit: 916 semantic pairs still share a run of ≥ 3 consecutive words inside long ayahs (phrase-level similarity, e.g. 2:25 ~ 3:15 «جنات تجري من تحتها الأنهار»). The rule keeps them semantic because the diff cannot place the difference precisely; a phrase-anchored diff could move them to lafzi later (PO decision).
 - Group members keep `differenceRanges: []` because no licensed source provides ranges; pairwise ranges live in `highlightRules`.
 - The committee corrects a rule by editing its ranges (→ `source: "committee"`, version + 1, status per the lifecycle). Shipping the edited JSON is an OTA update — no app rebuild.
 - Beta/production only use rules whose status is `approved`.

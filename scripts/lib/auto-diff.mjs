@@ -2,8 +2,12 @@
  * QMT-26: generate data-driven highlight rules for every pair of members in the review dataset.
  * Each rule: source = auto_diff, status = draft, with a confidence score — committee edits replace
  * or correct rules in the dataset (no app rebuild).
+ *
+ * Every pair also gets `similarityType` (lafzi | semantic, see similarityOf in src/domain/diff.ts).
+ * Semantic pairs get a rule with no ranges (granularity none) so the classification is stored as data.
+ * Groups are tagged in place: lafzi if at least one of their pairs is lafzi, else semantic.
  */
-import { diffPair } from '../../src/domain/diff.ts';
+import { diffPair, similarityOf } from '../../src/domain/diff.ts';
 
 export const ALGORITHM = 'auto_diff/lcs-word-v1: LCS on letter-only word keys (diacritics, Quranic marks and alef forms ignored for matching); letter ranges for diacritic-only or 1:1 similar-word substitutions';
 
@@ -27,16 +31,14 @@ export function buildHighlightRules(groups, quranSurahs) {
         const key = `${x.ayahId}|${y.ayahId}`;
         if (rules.has(key)) continue; // first group wins (HifzLink groups are listed first)
         const d = diffPair(side(x), side(y));
-        // Thematic / low-overlap pairs get no rule: the UI then says no precise range is available.
-        if (d.confidence === 'low') {
-          rules.set(key, null);
-          continue;
-        }
+        const similarityType = similarityOf(d);
         const rule = {
           id: `auto:${key}`,
           pair: [x.ayahId, y.ayahId],
+          // Semantic pairs: no ranges, the UI says no precise difference location is available.
           ranges: [...d.a.ranges, ...d.b.ranges],
           granularity: d.granularity,
+          similarityType,
           source: 'auto_diff',
           algorithm: 'lcs-word-v1',
           confidence: d.confidence,
@@ -51,5 +53,15 @@ export function buildHighlightRules(groups, quranSurahs) {
       }
     }
   }
-  return [...rules.values()].filter(Boolean);
+  for (const g of groups) {
+    let lafzi = false;
+    for (let i = 0; i < g.members.length && !lafzi; i++) {
+      for (let j = i + 1; j < g.members.length && !lafzi; j++) {
+        const [x, y] = [g.members[i].ayahId, g.members[j].ayahId].sort((p, q) => pos(p) - pos(q));
+        if (rules.get(`${x}|${y}`)?.similarityType === 'lafzi') lafzi = true;
+      }
+    }
+    g.similarityType = lafzi ? 'lafzi' : 'semantic';
+  }
+  return [...rules.values()];
 }
