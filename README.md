@@ -37,6 +37,16 @@ Then open the app in Expo Go, an iOS simulator, or an Android emulator.
 - `scripts/build-quran-data.mjs` converts the unmodified Tanzil XML into `src/data/generated/quran-text.json` (ayah strings copied verbatim) and `quran-meta.json` (surahs, juz, 604 Madinah pages). Run `npm run build:data` after changing the Tanzil files.
 - `src/data/` holds repository interfaces (`QuranRepository`) with bundled-JSON implementations. Screens only talk to repositories, so an API-backed implementation can replace them later.
 - `src/data/__tests__/quran-text.checksum.test.ts` fails if the bundled text drifts from the Tanzil source by a single byte.
+- Review statuses, separate review/production datasets, build flavors and OTA channels: see [docs/DATA_MODEL.md](docs/DATA_MODEL.md).
+
+## Build flavors
+
+| Command | Flavor |
+| --- | --- |
+| `npm start` | `review` (candidate data with status badges) |
+| `npm run start:production` | `production` (approved only — currently empty) |
+
+EAS build profiles `review`, `beta`, `production` (and `development`) in `eas.json` set the flavor and a separate EAS Update channel each.
 
 ## Data sources
 
@@ -55,4 +65,6 @@ Mutashabihat files under `assets/data/candidate/` are **not scholar-approved** a
 - `npm test` — unit tests (jest-expo)
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run lint` — `expo lint`
-- `npm run build:data` — regenerate app JSON from the Tanzil XML
+- `npm run build:data` — regenerate app JSON from the Tanzil XML and the review dataset
+- `npm run build:mutashabihat` — regenerate only the review (candidate) dataset
+- `npm run check:production-bundle` — prove candidate data is absent from beta/production bundles
