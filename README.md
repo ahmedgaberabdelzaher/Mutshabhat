@@ -4,9 +4,9 @@ A cross-platform Quran app to help review and memorize the **mutashabihat** (sim
 
 تطبيق قرآن متعدد المنصات للمساعدة على مراجعة وحفظ **المتشابهات**.
 
-This repository currently contains a clean Expo starter scaffold. Feature work will follow once business requirements are shared by the BA.
+This repository contains an Expo starter scaffold plus bundled, **candidate** Quran and mutashabihat data for a first review/PoC build. Feature work follows in later commits.
 
-يحتوي هذا المستودع حاليًا على هيكل مشروع Expo مبدئي نظيف. سيتم بناء الميزات بعد وصول متطلبات الأعمال من الـ BA.
+يحتوي هذا المستودع على هيكل مشروع Expo وعلى بيانات قرآن ومتشابهات **مرشَّحة للمراجعة** لأول نسخة تجريبية. بناء الميزات يأتي في التزامات لاحقة.
 
 ## Stack
 
@@ -31,10 +31,19 @@ The app will be Arabic-first, so right-to-left (RTL) layout should be considered
 
 - Enable RTL at the app root (for example with React Native's `I18nManager` and Expo's localization support) when screens are built.
 - Use start/end spacing (`paddingStart` / `marginEnd`) instead of left/right so layout flips correctly.
-- Prefer Quran-capable fonts (such as KFGQPC or Amiri Quran) and test text wrapping, diacritics (tashkeel), and verse layout in RTL.
+- Prefer the bundled **Amiri Quran** font (`assets/fonts/amiri-quran/`) and test text wrapping, diacritics (tashkeel), and verse layout in RTL. KFGQPC fonts are not bundled (license is not clearly compatible).
 - Keep navigation, icons, and gestures RTL-aware (back chevrons, tab order, swipe direction).
 
 These notes are a reminder only; RTL is not wired up in this scaffold.
+
+
+## Data sources
+
+Licensed Quran text, mutashabihat samples, and fonts are documented in [DATA_SOURCES.md](DATA_SOURCES.md).
+
+Mutashabihat files under `assets/data/candidate/` are **not scholar-approved** and must not ship in beta or production until approved. The official Tanzil Uthmani text (unmodified, CC BY 3.0) is in `assets/data/tanzil/`. The primary Quran font is Amiri Quran (SIL OFL 1.1).
+
+بيانات المتشابهات تحت `assets/data/candidate/` مرشَّحة للمراجعة فقط، ولا تُدرَج في البيتا أو الإنتاج قبل الاعتماد.
 
 ## Scripts
 
