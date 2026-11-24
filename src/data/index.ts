@@ -8,7 +8,7 @@ import { loadBundledDataset } from './datasets';
 import { LocalMutashabihatRepository } from './mutashabihat-repository';
 import { LocalQuranRepository, type QuranMetaFile, type QuranTextFile } from './quran-repository';
 
-export type { Analogue, MutashabihatRepository, Scope, SimilarityFilter } from './mutashabihat-repository';
+export type { Analogue, MutashabihatRepository, Position, Scope, SimilarityFilter } from './mutashabihat-repository';
 export type { QuranRepository } from './quran-repository';
 
 let quranRepo: LocalQuranRepository | undefined;

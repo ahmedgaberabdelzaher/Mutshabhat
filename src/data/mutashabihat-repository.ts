@@ -32,6 +32,14 @@ export type Analogue = {
   similarityType: SimilarityType;
 };
 
+/** A position (مَوضِع) for browsing: an ayah with at least one visible analogue. */
+export type Position = {
+  ayahId: AyahId;
+  analogueCount: number;
+  statuses: ReviewStatus[];
+  pilot: boolean;
+};
+
 export type DatasetInfo = {
   kind: MutashabihatDataset['kind'];
   datasetVersion: number;
@@ -49,6 +57,8 @@ export interface MutashabihatRepository {
   getAnalogues(ayahId: AyahId, scope?: Scope, similarity?: SimilarityFilter): Analogue[];
   /** Ayah ids (mushaf order) that have at least one visible analogue. */
   getPositionAyahIds(scope?: Scope, similarity?: SimilarityFilter): AyahId[];
+  /** Positions among the given ayah ids (mushaf order), for surah / juz / page browsing (QMT-30/31/32). */
+  getPositionsIn(ayahIds: AyahId[], scope?: Scope, similarity?: SimilarityFilter): Position[];
   /** Data-driven highlight rule for a pair (QMT-26), if one is visible. */
   getHighlightRule(a: AyahId, b: AyahId): HighlightRule | undefined;
 }
@@ -186,6 +196,22 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
     return [...this.byAyah.keys()]
       .filter((id) => this.getAnalogues(id, scope, similarity).length > 0)
       .sort((a, b) => this.positionOf(a) - this.positionOf(b));
+  }
+
+  getPositionsIn(ayahIds: AyahId[], scope: Scope = 'all', similarity: SimilarityFilter = 'lafzi'): Position[] {
+    const out: Position[] = [];
+    for (const id of ayahIds) {
+      if (!this.byAyah.has(id)) continue;
+      const analogues = this.getAnalogues(id, scope, similarity);
+      if (!analogues.length) continue;
+      out.push({
+        ayahId: id,
+        analogueCount: analogues.length,
+        statuses: [...new Set(analogues.map((a) => a.status))],
+        pilot: analogues.some((a) => a.pilot),
+      });
+    }
+    return out.sort((a, b) => this.positionOf(a.ayahId) - this.positionOf(b.ayahId));
   }
 
   getHighlightRule(a: AyahId, b: AyahId): HighlightRule | undefined {
