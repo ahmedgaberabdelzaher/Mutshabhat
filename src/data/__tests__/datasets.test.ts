@@ -23,7 +23,7 @@ describe('bundled datasets (QMT-48 AC2)', () => {
   });
 
   it('review dataset holds candidate records only, each with source, version and valid ayah ids', () => {
-    expect(review.groups.length).toBeGreaterThan(2000);
+    expect(review.groups.length).toBeGreaterThan(1500);
     for (const g of review.groups) {
       expect(['draft', 'under_review']).toContain(g.status);
       expect(['quranpedia', 'waqar144', 'hifzlink']).toContain(g.source.name);
@@ -39,8 +39,30 @@ describe('bundled datasets (QMT-48 AC2)', () => {
     expect(pilot.every((g) => g.source.name === 'hifzlink' && g.reviewCycle === 'QMT-49')).toBe(true);
   });
 
-  it('includes all Waqar144 entries', () => {
-    expect(review.groups.filter((g) => g.source.name === 'waqar144')).toHaveLength(1348);
+  it('includes all Waqar144 entries (kept records + merged duplicates keep their attribution)', () => {
+    const waqar = review.groups.flatMap((g) => g.attributions ?? [{ name: g.source.name, groupId: g.id }]);
+    expect(waqar.filter((x) => x.name === 'waqar144')).toHaveLength(1348);
+  });
+
+  it('has no duplicate records: one record per set of ayahs, no ayah twice in a record (owner: no duplicates)', () => {
+    const span = (m: { ayahId: string; ayahIds?: string[] }) => m.ayahIds ?? [m.ayahId];
+    const sets = new Set<string>();
+    for (const g of review.groups) {
+      const all = g.members.flatMap(span);
+      expect(new Set(all).size).toBe(all.length);
+      const key = g.members.map((m) => span(m).join('+')).sort().join(',');
+      expect(sets.has(key)).toBe(false); // also covers A~B vs B~A and the same pair from several sources
+      sets.add(key);
+    }
+    // Merged records keep every source attribution, the kept record first; status = most advanced; pilot kept.
+    const attributions = review.groups.flatMap((g) => g.attributions ?? [{ name: g.source.name, groupId: g.id }]);
+    expect(attributions).toHaveLength(2928);
+    expect(new Set(attributions.map((x) => x.groupId)).size).toBe(2928);
+    for (const g of review.groups.filter((x) => x.attributions)) {
+      expect(g.attributions![0]).toMatchObject({ name: g.source.name, groupId: g.id });
+      expect(g.attributions!.length).toBeGreaterThan(1);
+      if (g.attributions!.some((x) => x.pilot)) expect(g.pilot).toBe(true);
+    }
   });
 
   it('stores highlight rules as data: auto_diff drafts with valid ranges (QMT-26)', () => {

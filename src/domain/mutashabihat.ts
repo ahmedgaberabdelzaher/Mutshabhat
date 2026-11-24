@@ -44,6 +44,9 @@ export type MutashabihMember = {
   differenceRanges: WordRange[]; // empty if the source does not specify ranges
 };
 
+/** One original source record merged into a group (de-duplication). */
+export type SourceAttribution = { name: SourceName; ref?: string; groupId: string; note?: string; pilot?: boolean };
+
 export type MutashabihGroup = {
   id: string;
   members: MutashabihMember[];
@@ -51,6 +54,11 @@ export type MutashabihGroup = {
   status: ReviewStatus;
   review: ReviewMeta;
   source: { name: SourceName; ref?: string };
+  /**
+   * Present when several source records with the same set of ayahs were merged into this one (de-duplication,
+   * see docs/DATA_MODEL.md): every original attribution, the kept record first.
+   */
+  attributions?: SourceAttribution[];
   /** Part of the committee's pilot review set (QMT-49): the 285 HifzLink curated pairs. */
   pilot?: boolean;
   reviewCycle?: string;

@@ -1,3 +1,4 @@
+import { comparisonKey } from '@/domain/diff';
 import type { HighlightRule, MutashabihGroup, TitleBasis } from '@/domain/mutashabihat';
 import type { Ayah, AyahId } from '@/domain/quran';
 
@@ -25,4 +26,19 @@ export function groupTitle(group: MutashabihGroup): ListTitle | undefined {
 /** Beginning of the ayah, used when the data has no title. Exact words of the Tanzil text. */
 export function fallbackTitle(ayah: Ayah): ListTitle {
   return { text: ayah.words.slice(0, FALLBACK_TITLE_WORDS).join(' '), ayahId: ayah.id, basis: 'fallback' };
+}
+
+/**
+ * Normalised title for de-duplicating list rows: letters only (comparisonKey: no diacritics, unified alef/ya forms),
+ * one leading و/ف conjunction dropped from the first word. «هُدًى لِّلْمُتَّقِينَ» and «وَهُدًى لِلْمُتَّقِينَ» → same key.
+ */
+export function titleKey(text: string): string {
+  return text
+    .split(/\s+/)
+    .map((w, i) => {
+      const k = comparisonKey(w);
+      return i === 0 && k.length > 2 && (k[0] === 'و' || k[0] === 'ف') ? k.slice(1) : k;
+    })
+    .filter(Boolean)
+    .join(' ');
 }

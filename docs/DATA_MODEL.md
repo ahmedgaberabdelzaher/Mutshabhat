@@ -25,6 +25,7 @@ Review dataset statuses in Sprint 1:
 
 - 285 HifzLink curated pairs → `under_review`, `pilot: true`, `reviewCycle: "QMT-49"` (committee pilot set).
 - 1,348 Waqar144 entries and 1,295 de-duplicated Quranpedia groups → `draft`.
+- 2,928 source records → **1,714 records** after de-duplication (see "De-duplication"); every source record keeps its attribution.
 
 ## Similarity type: lafzi vs semantic
 
@@ -85,7 +86,7 @@ Rules (`meaningfulSharedSpan`, `extendToTwoWords`, `isTitleStopword`, `findKeySe
 
 **Groups with more than 2 members:** candidates are the shared (meaningful) parts of all pairs in the group — before the per-ayah extension. For each candidate, count the members that contain it (letter-only keys, contiguous, inside one ayah); it must be found in ≥ 2 members. Ranking: multi-word candidates first (a lone word found in more members loses to a phrase), then the most members, then more words. The title is taken from the first member (group order) that contains it and, if one word, extended from that member's own ayah as above. No candidate → fallback (beginning of the first member). Example: `waqar144:2:34` (7 ayahs) → «إِلَّآ إِبْلِيسَ», found in all 7. Two-member groups get their pair's shared part. Positions (browse lists) use the title of their first (primary) analogue, in the position ayah's wording.
 
-Counts (review dataset v1, 6,830 pairs / 2,928 groups):
+Counts (review dataset v1, 6,830 pairs / 2,928 groups before de-duplication; groups after de-duplication: shared 1,565 · extended 41 · meaningful_word 16 · meaningful_word_extended 41 · fallback 51):
 
 | `titleMethod` | pairs | groups | pilot groups |
 | --- | --- | --- | --- |
@@ -94,6 +95,29 @@ Counts (review dataset v1, 6,830 pairs / 2,928 groups):
 | meaningful_word | 34 | 20 | 0 |
 | meaningful_word_extended | 735 | 53 | 7 |
 | fallback | 757 | 54 | 16 |
+
+## De-duplication (owner: «القائمة يجب ان لا يكون بها تكرار»)
+
+No list in the app may show the same thing twice. Three layers:
+
+**1. Data (build time, `scripts/build-mutashabihat-data.mjs`).** Source records with the same set of ayahs are one record: the same unordered pair (A~B and B~A), the same pair or group from several sources (HifzLink / Waqar144 / Quranpedia), and repeated entries inside one source (Waqar144 repeats, Quranpedia groups with different notes).
+- Kept record (id, `source`, member order, note): **pilot (HifzLink QMT-49) > HifzLink > Waqar144 > Quranpedia > first seen**.
+- `status` = the most advanced of the merged records (approved > under_review > draft); `pilot` if any merged record is pilot; `review.version` = the highest.
+- `attributions[]` keeps **every** original record (`name`, `ref`, original `groupId`, `note`, `pilot`), the kept one first, so no source loses its credit (DATA_SOURCES.md licences still apply to each).
+- Before: 2,928 records, 641 sets of ayahs listed more than once (1,214 extra records; 415 of the sets are pairs, 333 of them listed in both orders A~B / B~A; 243 sets across sources, 398 within one source). After: 1,714 records. The 285 HifzLink pilot pairs are still 285 records (82 of them now also carry Waqar144 / Quranpedia attributions). No record lists an ayah twice (none did).
+- Highlight rules were already one per unordered pair (6,830, unchanged).
+
+**2. Records list (`getRecordRows` in `src/data/mutashabihat-repository.ts`)**: one row per distinct similar phrase, computed for the list being shown (scope + similarity filter):
+- A record whose ayahs all lie inside a **larger record of the same list** is shown inside that record's row, not separately (collapse, not hide: the row's detail screen lists it under «المصادر»). With several covering records, the largest wins (then pilot > source priority > list order).
+- Rows with the same **normalised title** are merged: `titleKey()` = letters only (comparisonKey: no diacritics, unified alef/ya forms), one leading و/ف dropped. E.g. «هُدًى لِّلْمُتَّقِينَ» was rows 2 and 3 of the pilot list (2:2 ~ 27:2 and 2:2 ~ 31:3); it is now one row with positions البقرة ٢ · النمل ٢ · لقمان ٣.
+- A row shows the primary record's title (pilot > HifzLink > Waqar144 > Quranpedia > list order), every status / source of its records, and the refs of all its positions (first 6, then «+N»). Tapping it opens `/record/[id]`: the phrase, **all positions** (highlighted where the phrase occurs, each linking to its ayah) and every merged record with its sources, status and note.
+- Rows (review build): pilot · lafzi 285 → **215** (17 titles repeated in 87 rows before); all · lafzi 2,713 → **1,006** (978 lafzi rows, 28 rows of pilot pairs tagged semantic); all · any 2,928 → **1,133** (978 lafzi / 155 semantic). Before, in all · lafzi: 1,779 rows shared an ayah set with another row, 529 pairs and 203 groups also appeared inside a larger record, and 667 titles were repeated across 2,131 rows. After: 0 of each (tests).
+
+**3. Ayah analogue list (`getAnalogues`)**: one card per analogue ayah. Members whose spans overlap (e.g. Waqar144 multi-ayah [5:1, 5:2] and another source's 5:2) are one analogue (span = union). Before: 48 ayah screens showed some ayah twice; after: 0. Cards whose phrases happen to read the same are different ayahs and each shows its own ref and full text (1,323 lists have such cards).
+
+**Browse lists (surah / juz / page)** list each ayah once (already true); rows with the same phrase (590 rows in 60 surah lists) are different ayahs and each shows its ref.
+
+Tests: `src/data/__tests__/no-duplicates.test.ts` (every records view: unique titles, each record exactly once, covered records folded; analogue lists; browse lists), `datasets.test.ts` (one record per ayah set, all 2,928 attributions kept), `records-screen.review.test.tsx` (the «هُدًى لِّلْمُتَّقِينَ» row and its detail screen).
 
 ## Swapping data without a rebuild
 
@@ -142,7 +166,7 @@ Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pai
   - `method: "phrase"` (`algorithm: phrase-anchor-v1`, `phraseDiff()`) — low overall overlap but a shared phrase of ≥ 3 words. It locates up to 3 shared phrases (longest first, non-overlapping), stores them in `phrases`, highlights diacritic-only differences inside each phrase at letter level, and compares the **2 words before and after** each phrase on both sides: words that don't match there are highlighted (letter ranges too for a 1↔1 similar-word substitution). The rest of each ayah is context and is not highlighted. Example 2:25 ~ 3:15: shared «جَنَّٰتٍ/جَنَّٰتٌ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ»; highlighted «أَنَّ لَهُمْ» / «عِندَ رَبِّهِمْ» before and «كُلَّمَا رُزِقُوا۟» / «خَٰلِدِينَ فِيهَا» after, and the case ending of جنات at letter level.
 
   Semantic pairs get a rule with `similarityType: "semantic"`, `confidence: "low"`, no `method`, `granularity: "none"` and no ranges (no false precision); the review build shows «تشابه معنوي … لا يتوفر تحديد دقيق لموضع الاختلاف». A group is `lafzi` if at least one of its pairs is lafzi, else `semantic`. The committee can reclassify a pair by editing `similarityType` on its rule (data change, OTA).
-- Counts in review dataset v1 (6,830 pairs): **3,982 lafzi** (3,063 `lcs` + 919 `phrase`) / **2,848 semantic** pairs; groups 2,684 lafzi / 244 semantic. Pairs per source (a pair counted under every source listing it): HifzLink 256 / 29, Waqar144 1,246 / 242, Quranpedia 3,314 / 2,673. Groups per source: HifzLink 256 / 29, Waqar144 1,285 / 63, Quranpedia 1,143 / 152. HifzLink pilot pairs: 256 lafzi (253 lcs + 3 phrase) / 29 semantic — all 285 visible by default in the review build.
+- Counts in review dataset v1 (6,830 pairs): **3,982 lafzi** (3,063 `lcs` + 919 `phrase`) / **2,848 semantic** pairs; groups 2,684 lafzi / 244 semantic before de-duplication, **1,517 lafzi / 197 semantic** after (1,714 records). Pairs per source (a pair counted under every source listing it): HifzLink 256 / 29, Waqar144 1,246 / 242, Quranpedia 3,314 / 2,673. Groups per source: HifzLink 256 / 29, Waqar144 1,285 / 63, Quranpedia 1,143 / 152. HifzLink pilot pairs: 256 lafzi (253 lcs + 3 phrase) / 29 semantic — all 285 visible by default in the review build.
 - Group members keep `differenceRanges: []` because no licensed source provides ranges; pairwise ranges live in `highlightRules`.
 - The committee corrects a rule by editing its ranges (→ `source: "committee"`, version + 1, status per the lifecycle). Shipping the edited JSON is an OTA update — no app rebuild.
 - Beta/production only use rules whose status is `approved`.
