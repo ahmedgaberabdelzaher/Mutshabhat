@@ -20,9 +20,12 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.getByTestId('analogue-27:2')).toBeTruthy();
     expect(screen.getByTestId('analogue-status-27:2')).toHaveTextContent('قيد المراجعة');
     expect(screen.getByTestId('analogue-pilot-27:2')).toBeTruthy();
-    expect(screen.getByTestId('analogue-text-27:2-source')).toHaveTextContent(getQuranRepository().getAyah('27:2').text, {
-      exact: true,
-    });
+    expect(screen.getByTestId('analogue-text-27:2-source')).toHaveTextContent(
+      getQuranRepository().getAyah('27:2').text,
+      {
+        exact: true,
+      },
+    );
   });
 
   it('shows draft candidates too, and the pilot filter narrows to HifzLink pairs', async () => {
@@ -60,6 +63,12 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.getByTestId('analogue-3:15')).toHaveTextContent(/آل عمران ١٥/); // surah + ayah number kept
   });
 
+  it('extends a one-word shared title with the next word of the analogue (2:2 ~ 27:2 «هُدًى»)', async () => {
+    const screen = await open('/ayah/2/2');
+    const words = getQuranRepository().getAyah('27:2').words;
+    expect(screen.getByTestId('title-analogue-27:2')).toHaveTextContent(words.slice(0, 2).join(' '), { exact: true });
+  });
+
   it('falls back to the beginning of the ayah + type badge when nothing is shared', async () => {
     const screen = await open('/ayah/75/31');
     const text = getQuranRepository().getAyah('75:32').text; // 3 words: the whole ayah
@@ -78,10 +87,14 @@ describe('difference highlighting — review build (QMT-26 AC3)', () => {
     const screen = await open('/ayah/2/2');
     // Data-driven rule auto:2:2|27:2 — «لِّلْمُتَّقِينَ» vs «وَبُشْرَىٰ لِلْمُؤْمِنِينَ».
     const quran = getQuranRepository();
-    expect(screen.getByTestId('analogue-text-27:2-word')).toHaveTextContent(quran.getAyah('27:2').words.slice(1, 3).join(' '));
+    expect(screen.getByTestId('analogue-text-27:2-word')).toHaveTextContent(
+      quran.getAyah('27:2').words.slice(1, 3).join(' '),
+    );
     expect(screen.getByTestId('self-text-27:2-2:2-word')).toHaveTextContent(quran.getAyah('2:2').words[6]);
     // Highlighting never changes the text.
-    expect(screen.getByTestId('analogue-text-27:2-source')).toHaveTextContent(quran.getAyah('27:2').text, { exact: true });
+    expect(screen.getByTestId('analogue-text-27:2-source')).toHaveTextContent(quran.getAyah('27:2').text, {
+      exact: true,
+    });
     expect(screen.getByTestId('rule-27:2-status')).toHaveTextContent('مسوّدة');
   });
 
@@ -101,4 +114,3 @@ describe('difference highlighting — review build (QMT-26 AC3)', () => {
     expect(screen.getAllByText(/لا يتوفر تحديد دقيق لموضع الاختلاف/).length).toBeGreaterThan(0);
   });
 });
-

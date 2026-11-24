@@ -7,12 +7,21 @@
  * Semantic pairs get a rule with no ranges (granularity none) so the classification is stored as data.
  * Groups are tagged in place: lafzi if at least one of their pairs is lafzi, else semantic.
  */
-import { MIN_TITLE_WORDS, comparisonKey, diffPair, findKeySequence, phraseDiff, sharedSpan, similarityOf } from '../../src/domain/diff.ts';
+import {
+  comparisonKey,
+  diffPair,
+  extendToTwoWords,
+  findKeySequence,
+  meaningfulSharedSpan,
+  phraseDiff,
+  similarityOf,
+} from '../../src/domain/diff.ts';
 
 /** Words shown when a pair/group has no displayable shared part (title basis = fallback). */
 export const FALLBACK_TITLE_WORDS = 5;
 
-export const ALGORITHM = 'auto_diff/lcs-word-v1: LCS on letter-only word keys (diacritics, Quranic marks and alef forms ignored for matching); letter ranges for diacritic-only or 1:1 similar-word substitutions; auto_diff/phrase-anchor-v1 (method=phrase): low-overlap pairs sharing a contiguous phrase of >= 3 words are lafzi, highlighted in the 2 words around each shared phrase';
+export const ALGORITHM =
+  'auto_diff/lcs-word-v1: LCS on letter-only word keys (diacritics, Quranic marks and alef forms ignored for matching); letter ranges for diacritic-only or 1:1 similar-word substitutions; auto_diff/phrase-anchor-v1 (method=phrase): low-overlap pairs sharing a contiguous phrase of >= 3 words are lafzi, highlighted in the 2 words around each shared phrase';
 
 export function buildHighlightRules(groups, quranSurahs) {
   const words = (id) => {
@@ -24,13 +33,22 @@ export function buildHighlightRules(groups, quranSurahs) {
     return s * 1000 + a;
   };
   const side = (m) => (m.ayahIds ?? [m.ayahId]).map((id) => ({ ayahId: id, words: words(id) }));
-  const span = (r) => ({ ...r, text: words(r.ayahId).slice(r.startWord, r.endWord + 1).join(' ') });
+  const span = (r) => ({
+    ...r,
+    text: words(r.ayahId)
+      .slice(r.startWord, r.endWord + 1)
+      .join(' '),
+  });
   const beginning = (m) => {
     const id = (m.ayahIds ?? [m.ayahId])[0];
     const n = Math.min(FALLBACK_TITLE_WORDS, words(id).length);
     return span({ ayahId: id, startWord: 0, endWord: n - 1 });
   };
   const rules = new Map();
+  /** Build-only: per pair key, the shared (meaningful) part's letter keys + whether it moved off a particle. */
+  const sharedOf = new Map();
+  const methodOf = (moved, extended) =>
+    moved ? (extended ? 'meaningful_word_extended' : 'meaningful_word') : extended ? 'extended' : 'shared';
   for (const g of groups) {
     for (let i = 0; i < g.members.length; i++) {
       for (let j = i + 1; j < g.members.length; j++) {
@@ -63,16 +81,24 @@ export function buildHighlightRules(groups, quranSurahs) {
         const letters = [...d.a.letters, ...d.b.letters];
         if (letters.length) rule.letterRanges = letters;
         if (d.type) rule.type = d.type;
-        // List title: the longest common contiguous part, inside one ayah per side (lafzi: ≥ 1 word, e.g.
-        // «هُدًى» for 2:2 ~ 27:2; semantic: ≥ 2 words, a lone shared word there is noise). For method=phrase
-        // this is the (longest) shared phrase. Otherwise the beginning of each ayah (fallback).
-        const shared = sharedSpan(side(x), side(y), similarityType === 'lafzi' ? 1 : MIN_TITLE_WORDS);
+        // List title (docs/DATA_MODEL.md «List titles»): the longest common contiguous part (inside one ayah per
+        // side) that contains a meaningful, non-particle word; a 1-word part is extended to 2 words from each
+        // ayah's own text. No meaningful shared word → beginning of each ayah (fallback).
+        const shared = meaningfulSharedSpan(side(x), side(y));
         if (shared) {
-          rule.titles = [span(shared.a), span(shared.b)];
+          const ea = extendToTwoWords(shared.a, words(shared.a.ayahId));
+          const eb = extendToTwoWords(shared.b, words(shared.b.ayahId));
+          rule.titles = [span(ea.range), span(eb.range)];
           rule.titleBasis = method === 'phrase' ? 'phrase' : 'lcs';
+          rule.titleMethod = methodOf(shared.movedOffParticle, ea.extended || eb.extended);
+          sharedOf.set(key, {
+            keys: span(shared.a).text.split(' ').map(comparisonKey).filter(Boolean),
+            moved: shared.movedOffParticle,
+          });
         } else {
           rule.titles = [beginning(x), beginning(y)];
           rule.titleBasis = 'fallback';
+          rule.titleMethod = 'fallback';
         }
         rules.set(key, rule);
       }
@@ -103,8 +129,9 @@ export function buildHighlightRules(groups, quranSurahs) {
       for (let j = i + 1; j < g.members.length; j++) {
         const [x, y] = [g.members[i].ayahId, g.members[j].ayahId].sort((p, q) => pos(p) - pos(q));
         const r = rules.get(`${x}|${y}`);
-        if (!r || r.titleBasis === 'fallback') continue;
-        const keys = r.titles[0].text.split(' ').map(comparisonKey).filter(Boolean);
+        const sh = sharedOf.get(`${x}|${y}`);
+        if (!r || !sh) continue;
+        const keys = sh.keys; // the shared, meaningful part (not the per-ayah extension)
         const sig = keys.join(' ');
         if (seen.has(sig)) continue;
         seen.add(sig);
@@ -112,12 +139,38 @@ export function buildHighlightRules(groups, quranSurahs) {
         const coverage = hits.filter(Boolean).length;
         // < 2: the pair's rule came from another group whose members span different ayahs.
         if (coverage < 2) continue;
-        if (!best || coverage > best.coverage || (coverage === best.coverage && keys.length > best.len)) {
-          best = { coverage, len: keys.length, at: hits.find(Boolean), basis: r.titleBasis };
+        // Prefer multi-word shared parts (a lone word in more members loses to a phrase); then the most
+        // members; then more words.
+        const multi = keys.length >= 2 ? 1 : 0;
+        if (
+          !best ||
+          multi > best.multi ||
+          (multi === best.multi && (coverage > best.coverage || (coverage === best.coverage && keys.length > best.len)))
+        ) {
+          best = {
+            multi,
+            coverage,
+            len: keys.length,
+            at: hits.find(Boolean),
+            basis: r.titleBasis,
+            moved: sh.moved,
+          };
         }
       }
     }
-    if (!best) return { title: beginning(g.members[0]), titleBasis: 'fallback', titleCoverage: 1 };
-    return { title: span(best.at), titleBasis: best.basis, titleCoverage: best.coverage };
+    if (!best)
+      return {
+        title: beginning(g.members[0]),
+        titleBasis: 'fallback',
+        titleMethod: 'fallback',
+        titleCoverage: 1,
+      };
+    const e = extendToTwoWords(best.at, words(best.at.ayahId));
+    return {
+      title: span(e.range),
+      titleBasis: best.basis,
+      titleMethod: methodOf(best.moved, e.extended),
+      titleCoverage: best.coverage,
+    };
   }
 }

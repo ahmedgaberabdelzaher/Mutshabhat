@@ -396,3 +396,208 @@ export function findKeySequence(side: Side, keys: string[]): DiffWordRange | nul
   }
   return null;
 }
+
+/**
+ * Particles / function words that do not count as "shared" for list titles (PO decision). Matched on the
+ * comparison key (letters only, alef forms unified, ى→ي), also with one leading و / ف (ومن، فلا …).
+ */
+export const TITLE_STOPWORDS: readonly string[] = [
+  // prepositions
+  'من',
+  'في',
+  'علي',
+  'الي',
+  'عن',
+  'مع',
+  'حتي',
+  'لدي',
+  // negation / interrogation / conditional / exception / vocative particles
+  'ما',
+  'لا',
+  'لم',
+  'لن',
+  'ليس',
+  'هل',
+  'ان',
+  'اذ',
+  'اذا',
+  'لو',
+  'لولا',
+  'الا',
+  'يا',
+  'كي',
+  'لما',
+  'اما',
+  // conjunctions / adverbial particles
+  'ثم',
+  'او',
+  'ام',
+  'قد',
+  'بل',
+  'لكن',
+  'انما',
+  'كما',
+  'بما',
+  'مما',
+  'ممن',
+  'عما',
+  'فيما',
+  // relative & demonstrative pronouns
+  'الذي',
+  'التي',
+  'الذين',
+  'اللاتي',
+  'اللائي',
+  'ذلك',
+  'ذلكم',
+  'هذا',
+  'هذه',
+  'تلك',
+  'اولئك',
+  'هولاء',
+  'هاولاء',
+  // personal pronouns
+  'هو',
+  'هي',
+  'هم',
+  'هن',
+  'هما',
+  'انا',
+  'نحن',
+  'انت',
+  'انتم',
+  // prepositions + pronoun suffix (له، فيها، عنها، عليهم …)
+  'له',
+  'لها',
+  'لهم',
+  'لهما',
+  'لهن',
+  'لك',
+  'لكم',
+  'لي',
+  'لنا',
+  'به',
+  'بها',
+  'بهم',
+  'بهما',
+  'بهن',
+  'بك',
+  'بكم',
+  'بي',
+  'بنا',
+  'فيه',
+  'فيها',
+  'فيهم',
+  'فيهما',
+  'فيهن',
+  'فيك',
+  'فيكم',
+  'فينا',
+  'منه',
+  'منها',
+  'منهم',
+  'منهما',
+  'منهن',
+  'منك',
+  'منكم',
+  'مني',
+  'منا',
+  'عليه',
+  'عليها',
+  'عليهم',
+  'عليهما',
+  'عليهن',
+  'عليك',
+  'عليكم',
+  'علينا',
+  'اليه',
+  'اليها',
+  'اليهم',
+  'اليهما',
+  'اليهن',
+  'اليك',
+  'اليكم',
+  'الينا',
+  'عنه',
+  'عنها',
+  'عنهم',
+  'عنهما',
+  'عنهن',
+  'عنك',
+  'عنكم',
+  'عني',
+  'عنا',
+];
+const STOP = new Set(TITLE_STOPWORDS);
+
+/** True if a token (raw Tanzil word) is only a particle / function word for title purposes. */
+export function isTitleStopword(raw: string): boolean {
+  const k = comparisonKey(raw);
+  if (!k) return true;
+  return STOP.has(k) || (/^[وف]/.test(k) && STOP.has(k.slice(1)));
+}
+
+export type TitleShared = {
+  a: DiffWordRange;
+  b: DiffWordRange;
+  length: number;
+  /** A particle-only shared run at least as long as the chosen one exists (it was skipped for a meaningful run). */
+  movedOffParticle: boolean;
+};
+
+/**
+ * Longest common contiguous run (letter-only keys, inside one ayah per side) that contains at least one
+ * meaningful (non-stopword) word. Null if the two sides share no meaningful word.
+ */
+export function meaningfulSharedSpan(sideA: Side, sideB: Side): TitleShared | null {
+  const A = flatten(sideA);
+  const B = flatten(sideB);
+  const prefix = [0];
+  for (const t of A) prefix.push(prefix[prefix.length - 1] + (isTitleStopword(t.raw) ? 0 : 1));
+  let best = { i: 0, j: 0, len: 0 };
+  let longestParticleOnly = 0;
+  let prev = new Array<number>(B.length + 1).fill(0);
+  for (let i = 1; i <= A.length; i++) {
+    const cur = new Array<number>(B.length + 1).fill(0);
+    for (let j = 1; j <= B.length; j++) {
+      if (A[i - 1].key !== B[j - 1].key) continue;
+      const contA = i > 1 && A[i - 2].ayahId === A[i - 1].ayahId;
+      const contB = j > 1 && B[j - 2].ayahId === B[j - 1].ayahId;
+      cur[j] = contA && contB ? prev[j - 1] + 1 : 1;
+      const meaningful = prefix[i] - prefix[i - cur[j]] > 0;
+      if (!meaningful) longestParticleOnly = Math.max(longestParticleOnly, cur[j]);
+      if (meaningful && cur[j] > best.len) best = { i: i - cur[j], j: j - cur[j], len: cur[j] };
+    }
+    prev = cur;
+  }
+  if (best.len === 0) return null;
+  const a0 = A[best.i];
+  const a1 = A[best.i + best.len - 1];
+  const b0 = B[best.j];
+  const b1 = B[best.j + best.len - 1];
+  return {
+    a: { ayahId: a0.ayahId, startWord: a0.word, endWord: a1.word },
+    b: { ayahId: b0.ayahId, startWord: b0.word, endWord: b1.word },
+    length: best.len,
+    movedOffParticle: longestParticleOnly >= best.len,
+  };
+}
+
+/**
+ * Make a 1-word title span 2 words, inside its own ayah: add the FOLLOWING word (it shows where the two
+ * ayahs diverge right after the shared word); if the word ends the ayah, add the PRECEDING word. A one-word
+ * ayah (e.g. «الٓمٓ») stays one word. Returns the span unchanged if it already has ≥ 2 words.
+ */
+export function extendToTwoWords(range: DiffWordRange, words: string[]): { range: DiffWordRange; extended: boolean } {
+  const real = (k: number) => k >= 0 && k < words.length && comparisonKey(words[k]) !== '';
+  let count = 0;
+  for (let k = range.startWord; k <= range.endWord; k++) if (real(k)) count++;
+  if (count >= 2) return { range, extended: false };
+  for (let k = range.endWord + 1; k < words.length; k++) {
+    if (real(k)) return { range: { ...range, endWord: k }, extended: true };
+  }
+  for (let k = range.startWord - 1; k >= 0; k--) {
+    if (real(k)) return { range: { ...range, startWord: k }, extended: true };
+  }
+  return { range, extended: false };
+}

@@ -63,6 +63,7 @@ export type MutashabihGroup = {
   /** List title for the group (records screen); see docs/DATA_MODEL.md for the > 2 members rule. */
   title?: TitleSpan;
   titleBasis?: TitleBasis;
+  titleMethod?: TitleMethod;
   /** How many members contain the title phrase. */
   titleCoverage?: number;
   /** Group-level classification: lafzi if at least one of its pairs is lafzi. Beta/production require 'lafzi'. */
@@ -78,6 +79,18 @@ export type MutashabihGroup = {
 export type TitleSpan = { ayahId: AyahId; startWord: number; endWord: number; text: string };
 /** phrase = shared phrase (method=phrase); lcs = longest common contiguous part; fallback = beginning of the ayah. */
 export type TitleBasis = 'phrase' | 'lcs' | 'fallback' | 'committee';
+/**
+ * How the title was derived: shared = the shared part as is; extended = a 1-word shared part + the adjacent
+ * word of the same ayah; meaningful_word(_extended) = the longest shared part was particle-only, so the longest
+ * part with a meaningful word was used (then extended if 1 word); fallback = beginning of the ayah.
+ */
+export type TitleMethod =
+  | 'shared'
+  | 'extended'
+  | 'meaningful_word'
+  | 'meaningful_word_extended'
+  | 'fallback'
+  | 'committee';
 
 export type HighlightRule = {
   id: string;
@@ -98,6 +111,7 @@ export type HighlightRule = {
   /** List title for this pair: one span per side, [pair[0] side, pair[1] side] (each in its own wording). */
   titles?: [TitleSpan, TitleSpan];
   titleBasis?: TitleBasis;
+  titleMethod?: TitleMethod;
   /** For method=phrase: the shared phrase(s) located on each side (word ranges). */
   phrases?: { a: WordRange[]; b: WordRange[]; length: number }[];
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */

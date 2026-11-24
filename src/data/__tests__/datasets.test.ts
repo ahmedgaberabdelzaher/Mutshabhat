@@ -2,7 +2,7 @@ import { visibilityFor } from '@/config/flavor';
 import { loadBundledDataset } from '@/data/datasets';
 import { LocalMutashabihatRepository } from '@/data/mutashabihat-repository';
 import { getQuranRepository } from '@/data';
-import { comparisonKey } from '@/domain/diff';
+import { comparisonKey, isTitleStopword } from '@/domain/diff';
 import type { MutashabihatDataset } from '@/domain/mutashabihat';
 
 const quran = getQuranRepository();
@@ -113,19 +113,30 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       r.titles!.forEach(check);
       basis[r.titleBasis!] = (basis[r.titleBasis!] ?? 0) + 1;
       if (r.titleBasis === 'phrase') expect(r.method).toBe('phrase');
-      // Phrase titles: ≥ 3 words, or ≥ 2 when the shared phrase crosses an ayah end (title stays inside one ayah,
-      // e.g. 27:17 ~ 27:83 «فَهُمْ يُوزَعُونَ | حَتَّىٰٓ إِذَا»).
-      if (r.titleBasis === 'phrase') expect(r.titles![0].endWord - r.titles![0].startWord).toBeGreaterThanOrEqual(1);
-      if (r.titleBasis === 'fallback') expect(r.titles!.every((t) => t.startWord === 0 && t.endWord < 5)).toBe(true);
-      if (r.titleBasis !== 'fallback') {
-        // Both sides carry the same words (letter-only keys), each in its own exact wording.
-        const keys = (t: { text: string }) => t.text.split(' ').map(comparisonKey).filter(Boolean).join(' ');
-        expect(keys(r.titles![0])).toBe(keys(r.titles![1]));
+      expect(r.status).toBe('draft');
+      if (r.titleBasis === 'fallback') {
+        expect(r.titleMethod).toBe('fallback');
+        expect(r.titles!.every((t) => t.startWord === 0 && t.endWord < 5)).toBe(true);
+      } else {
+        expect(['shared', 'extended', 'meaningful_word', 'meaningful_word_extended']).toContain(r.titleMethod);
+        for (const t of r.titles!) {
+          const words = quran.getAyah(t.ayahId)!.words;
+          // Minimum 2 words (a one-word ayah such as «الٓمٓ» is the only exception) …
+          expect(t.endWord - t.startWord + 1).toBeGreaterThanOrEqual(Math.min(2, words.length));
+          // … and at least one meaningful (non-particle) word.
+          expect(t.text.split(' ').some((w) => !isTitleStopword(w))).toBe(true);
+        }
       }
     }
     expect(Object.keys(basis).sort()).toEqual(['fallback', 'lcs', 'phrase']);
     for (const g of review.groups) {
       check(g.title!);
+      expect(g.titleMethod).toBeDefined();
+      if (g.titleMethod !== 'fallback') {
+        const words = quran.getAyah(g.title!.ayahId)!.words;
+        expect(g.title!.endWord - g.title!.startWord + 1).toBeGreaterThanOrEqual(Math.min(2, words.length));
+        expect(g.title!.text.split(' ').some((w) => !isTitleStopword(w))).toBe(true);
+      }
       expect(g.titleCoverage).toBeLessThanOrEqual(g.members.length);
       if (g.titleBasis !== 'fallback') expect(g.titleCoverage).toBeGreaterThanOrEqual(2);
     }
@@ -136,6 +147,17 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       quran.getAyah('2:25')!.words.slice(7, 12).join(' '), // جَنَّٰتٍ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
       quran.getAyah('3:15')!.words.slice(9, 14).join(' '), // جَنَّٰتٌ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
     ]);
+    // One shared word, extended with the next word of each ayah (2:2 ~ 27:2: «هُدًى»).
+    const one = review.highlightRules.find((x) => x.pair.join() === '2:2,27:2')!;
+    expect(one.titleMethod).toBe('extended');
+    expect(one.titles!.map((t) => t.text)).toEqual([
+      quran.getAyah('2:2')!.words.slice(5, 7).join(' '), // هُدًى لِّلْمُتَّقِينَ
+      quran.getAyah('27:2')!.words.slice(0, 2).join(' '), // هُدًى وَبُشْرَىٰ
+    ]);
+    // Longest shared run is particle-only («إِنَّ فِى ذَٰلِكَ») → the meaningful run is used.
+    const moved = review.highlightRules.find((x) => x.pair.join() === '16:11,30:21')!;
+    expect(moved.titleMethod).toBe('meaningful_word');
+    expect(moved.titles![0].text.split(' ').map(comparisonKey)).toEqual(['لقوم', 'يتفكرون']);
   });
 
   it('review build lists all 285 HifzLink pilot pairs in the default view, whatever their type', () => {
@@ -157,7 +179,10 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       ...review,
       kind: 'production',
       groups: review.groups.map((g) => ({ ...g, status: 'approved' })),
-      highlightRules: review.highlightRules.map((r) => ({ ...r, status: 'approved' })),
+      highlightRules: review.highlightRules.map((r) => ({
+        ...r,
+        status: 'approved',
+      })),
     };
     const semanticPairs = new Set(
       review.highlightRules.filter((r) => r.similarityType === 'semantic').map((r) => r.pair.join('|')),
@@ -169,7 +194,9 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       for (const id of repo.getPositionAyahIds('all', 'any')) {
         for (const a of repo.getAnalogues(id, 'all', 'any')) {
           expect(a.similarityType).toBe('lafzi');
-          const key = [a.selfAyahIds[0], a.ayahId].sort((x, y) => quran.absoluteIndex(x) - quran.absoluteIndex(y)).join('|');
+          const key = [a.selfAyahIds[0], a.ayahId]
+            .sort((x, y) => quran.absoluteIndex(x) - quran.absoluteIndex(y))
+            .join('|');
           expect(semanticPairs.has(key)).toBe(false);
         }
       }
