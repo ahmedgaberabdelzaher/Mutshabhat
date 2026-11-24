@@ -4,7 +4,7 @@ A cross-platform Quran app to help review and memorize the **mutashabihat** (sim
 
 تطبيق قرآن متعدد المنصات للمساعدة على مراجعة وحفظ **المتشابهات**.
 
-This repository contains an Expo starter scaffold plus bundled, **candidate** Quran and mutashabihat data for a first review/PoC build. Feature work follows in later commits.
+This repository contains the Sprint 1 PoC: an Expo app that shows the unmodified Tanzil Quran text, plus bundled **candidate** mutashabihat data for a review build.
 
 يحتوي هذا المستودع على هيكل مشروع Expo وعلى بيانات قرآن ومتشابهات **مرشَّحة للمراجعة** لأول نسخة تجريبية. بناء الميزات يأتي في التزامات لاحقة.
 
@@ -25,17 +25,18 @@ npx expo start
 
 Then open the app in Expo Go, an iOS simulator, or an Android emulator.
 
-## RTL readiness
+## RTL and fonts
 
-The app will be Arabic-first, so right-to-left (RTL) layout should be considered from the start of feature work:
+- RTL is forced for the whole app with the `expo-localization` config plugin (`forcesRTL: true`, Arabic as the only supported locale). On web the document direction is set to `rtl` in `src/app/_layout.tsx`.
+- Text is left at `textAlign: 'auto'` and rows use `flexDirection: 'row'`, so both follow the RTL direction instead of hard-coded left/right.
+- The Mushaf font is configured in **one place**: `src/config/fonts.ts` (`ACTIVE_QURAN_FONT`). It is Amiri Quran (SIL OFL 1.1) until the King Fahd Complex font licence is granted.
+- Expo Go resets RTL preferences; to verify RTL on a device, use a development build (`npx expo run:ios`).
 
-- Enable RTL at the app root (for example with React Native's `I18nManager` and Expo's localization support) when screens are built.
-- Use start/end spacing (`paddingStart` / `marginEnd`) instead of left/right so layout flips correctly.
-- Prefer the bundled **Amiri Quran** font (`assets/fonts/amiri-quran/`) and test text wrapping, diacritics (tashkeel), and verse layout in RTL. KFGQPC fonts are not bundled (license is not clearly compatible).
-- Keep navigation, icons, and gestures RTL-aware (back chevrons, tab order, swipe direction).
+## Architecture (Sprint 1)
 
-These notes are a reminder only; RTL is not wired up in this scaffold.
-
+- `scripts/build-quran-data.mjs` converts the unmodified Tanzil XML into `src/data/generated/quran-text.json` (ayah strings copied verbatim) and `quran-meta.json` (surahs, juz, 604 Madinah pages). Run `npm run build:data` after changing the Tanzil files.
+- `src/data/` holds repository interfaces (`QuranRepository`) with bundled-JSON implementations. Screens only talk to repositories, so an API-backed implementation can replace them later.
+- `src/data/__tests__/quran-text.checksum.test.ts` fails if the bundled text drifts from the Tanzil source by a single byte.
 
 ## Data sources
 
@@ -51,3 +52,7 @@ Mutashabihat files under `assets/data/candidate/` are **not scholar-approved** a
 - `npm run ios` — open on iOS
 - `npm run android` — open on Android
 - `npm run web` — open in a browser
+- `npm test` — unit tests (jest-expo)
+- `npm run typecheck` — `tsc --noEmit`
+- `npm run lint` — `expo lint`
+- `npm run build:data` — regenerate app JSON from the Tanzil XML
