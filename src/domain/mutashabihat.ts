@@ -76,6 +76,13 @@ export type HighlightRule = {
   granularity: 'word' | 'letter' | 'none';
   /** Pair-level classification; overrides the group's similarityType for this pair. */
   similarityType?: SimilarityType;
+  /**
+   * Auto-diff method: `lcs` = whole-ayah word LCS; `phrase` = low overall overlap but a shared contiguous
+   * phrase of ≥ 3 words, highlighted around that phrase (see phraseDiff in src/domain/diff.ts).
+   */
+  method?: 'lcs' | 'phrase';
+  /** For method=phrase: the shared phrase(s) located on each side (word ranges). */
+  phrases?: { a: WordRange[]; b: WordRange[]; length: number }[];
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */
   source: 'auto_diff' | 'committee';
   algorithm?: string;

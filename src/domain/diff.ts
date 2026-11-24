@@ -20,6 +20,8 @@ export type PairDiff = {
   /** Share of comparable words that matched (0–1). */
   matchRatio: number;
   confidence: 'high' | 'medium' | 'low';
+  /** Longest run of consecutive shared words (letter-only keys). */
+  sharedRun: number;
 };
 
 // Arabic harakat, Quranic annotation marks, small letters, tatweel — ignored when COMPARING (never removed from text).
@@ -151,7 +153,7 @@ export function diffPair(sideA: Side, sideB: Side): PairDiff {
 
   // A single shared word only counts for very short ayahs (e.g. هُدًى لِّلْمُتَّقِينَ / هُدًى وَبُشْرَىٰ لِلْمُؤْمِنِينَ).
   if (pairs.length === 0 || (pairs.length === 1 && shorter > 4) || confidence === 'low') {
-    return { a: empty, b: empty, granularity: 'none', matchRatio, confidence: 'low' };
+    return { a: empty, b: empty, granularity: 'none', matchRatio, confidence: 'low', sharedRun: longestRun(A, B) };
   }
 
   const lettersA: DiffLetterRange[] = [];
@@ -207,14 +209,137 @@ export function diffPair(sideA: Side, sideB: Side): PairDiff {
     type,
     matchRatio,
     confidence,
+    sharedRun: longestRun(A, B),
+  };
+}
+
+/** Minimum shared contiguous phrase (words) that makes a low-overlap pair verbal (lafzi). */
+export const MIN_PHRASE = 3;
+/** Words examined on each side of a shared phrase by the phrase-level comparison. */
+export const PHRASE_WINDOW = 2;
+const MAX_PHRASES = 3;
+
+/** Longest common contiguous word run on comparison keys, restricted to unused tokens. */
+function bestRun(A: Tok[], B: Tok[], usedA: boolean[], usedB: boolean[]): [number, number, number] {
+  let best: [number, number, number] = [0, 0, 0];
+  let prev = new Array<number>(B.length + 1).fill(0);
+  for (let i = 1; i <= A.length; i++) {
+    const cur = new Array<number>(B.length + 1).fill(0);
+    for (let j = 1; j <= B.length; j++) {
+      if (!usedA[i - 1] && !usedB[j - 1] && A[i - 1].key === B[j - 1].key) {
+        cur[j] = prev[j - 1] + 1;
+        if (cur[j] > best[2]) best = [i - cur[j], j - cur[j], cur[j]];
+      }
+    }
+    prev = cur;
+  }
+  return best;
+}
+
+function longestRun(A: Tok[], B: Tok[]): number {
+  return bestRun(A, B, new Array(A.length).fill(false), new Array(B.length).fill(false))[2];
+}
+
+export type PhraseAnchor = { a: DiffWordRange[]; b: DiffWordRange[]; length: number };
+export type PhraseDiff = PairDiff & { phrases: PhraseAnchor[] };
+
+/**
+ * Phrase-level comparison for pairs whose overall overlap is low but which share a contiguous phrase of
+ * ≥ MIN_PHRASE words (e.g. «جنات تجري من تحتها الأنهار» inside two long ayahs).
+ *
+ * 1. Greedily locate the shared phrases, longest first (≥ MIN_PHRASE words, non-overlapping, at most 3).
+ * 2. Inside each phrase: same letters with different diacritics → letter ranges.
+ * 3. Around each phrase: compare the PHRASE_WINDOW words before and after it on both sides; words that do
+ *    not match (local LCS) are the difference highlighted next to the shared phrase. A 1↔1 substitution of
+ *    similar words also gets letter ranges.
+ * The rest of each ayah is context and is not highlighted.
+ */
+export function phraseDiff(sideA: Side, sideB: Side): PhraseDiff {
+  const A = flatten(sideA);
+  const B = flatten(sideB);
+  const matchRatio =
+    Math.round((lcsPairs(A, B, (x, y) => x.key === y.key).length / (Math.max(A.length, B.length) || 1)) * 100) / 100;
+  const usedA = new Array<boolean>(A.length).fill(false);
+  const usedB = new Array<boolean>(B.length).fill(false);
+  const runs: [number, number, number][] = [];
+  while (runs.length < MAX_PHRASES) {
+    const r = bestRun(A, B, usedA, usedB);
+    if (r[2] < MIN_PHRASE) break;
+    runs.push(r);
+    for (let k = 0; k < r[2]; k++) {
+      usedA[r[0] + k] = true;
+      usedB[r[1] + k] = true;
+    }
+  }
+  const sharedRun = runs.length ? runs[0][2] : longestRun(A, B);
+  if (!runs.length) {
+    const empty = { ranges: [], letters: [] };
+    return { a: empty, b: empty, granularity: 'none', matchRatio, confidence: 'low', sharedRun, phrases: [] };
+  }
+  runs.sort((x, y) => x[0] - y[0]);
+
+  const lettersA: DiffLetterRange[] = [];
+  const lettersB: DiffLetterRange[] = [];
+  const diffA = new Set<number>();
+  const diffB = new Set<number>();
+  const compareWindow = (ia: number[], ib: number[]) => {
+    const wa = ia.filter((i) => i >= 0 && i < A.length && !usedA[i]);
+    const wb = ib.filter((j) => j >= 0 && j < B.length && !usedB[j]);
+    const m = lcsPairs(wa, wb, (i, j) => A[i].key === B[j].key);
+    const ma = new Set(m.map((p) => wa[p[0]]));
+    const mb = new Set(m.map((p) => wb[p[1]]));
+    for (const [x, y] of m) if (A[wa[x]].raw !== B[wb[y]].raw) letterRangesFor(A[wa[x]], B[wb[y]], lettersA, lettersB);
+    const ga = wa.filter((i) => !ma.has(i));
+    const gb = wb.filter((j) => !mb.has(j));
+    ga.forEach((i) => diffA.add(i));
+    gb.forEach((j) => diffB.add(j));
+    if (ga.length === 1 && gb.length === 1 && similarity(A[ga[0]].key, B[gb[0]].key) >= 0.6) {
+      letterRangesFor(A[ga[0]], B[gb[0]], lettersA, lettersB);
+    }
+  };
+  const span = (from: number, n: number) => Array.from({ length: n }, (_, k) => from + k);
+
+  const phrases: PhraseAnchor[] = [];
+  for (const [ia, ib, len] of runs) {
+    for (let k = 0; k < len; k++) {
+      if (A[ia + k].raw !== B[ib + k].raw) letterRangesFor(A[ia + k], B[ib + k], lettersA, lettersB);
+    }
+    compareWindow(span(ia - PHRASE_WINDOW, PHRASE_WINDOW), span(ib - PHRASE_WINDOW, PHRASE_WINDOW));
+    compareWindow(span(ia + len, PHRASE_WINDOW), span(ib + len, PHRASE_WINDOW));
+    phrases.push({ a: toRanges(A.slice(ia, ia + len)), b: toRanges(B.slice(ib, ib + len)), length: len });
+  }
+
+  const toks = (src: Tok[], idx: Set<number>) => [...idx].sort((x, y) => x - y).map((i) => src[i]);
+  const tA = toks(A, diffA);
+  const tB = toks(B, diffB);
+  let type: DiffType | undefined;
+  if (tA.length && !tB.length) type = 'زيادة';
+  else if (!tA.length && tB.length) type = 'نقص';
+  else if (tA.length && tB.length) {
+    const sortKeys = (t: Tok[]) => t.map((x) => x.key).sort().join(' ');
+    type = sortKeys(tA) === sortKeys(tB) ? 'تقديم/تأخير' : 'إبدال';
+  }
+  const hasLetters = lettersA.length + lettersB.length > 0;
+  const hasWords = tA.length + tB.length > 0;
+  return {
+    a: { ranges: toRanges(tA), letters: lettersA },
+    b: { ranges: toRanges(tB), letters: lettersB },
+    granularity: hasLetters ? 'letter' : hasWords ? 'word' : 'none',
+    type,
+    matchRatio,
+    confidence: 'low',
+    sharedRun,
+    phrases,
   };
 }
 
 /**
- * Lafzi vs semantic classification (PO decision, MVP = lafzi only). A pair is `semantic` when diffPair
- * finds little shared wording: no shared word, a single shared word while the shorter side has > 4 words,
- * or LCS overlap < 30% of the shorter side's words (letter-only keys). Otherwise `lafzi`.
+ * Lafzi vs semantic classification (PO decisions; MVP = lafzi only). A pair is `semantic` only when
+ * diffPair finds little shared wording (no shared word; a single shared word while the shorter side has
+ * > 4 words; or LCS overlap < 30% of the shorter side's words, letter-only keys) AND the two sides share no
+ * contiguous phrase of ≥ MIN_PHRASE (3) words. Low-overlap pairs with such a phrase are lafzi and are
+ * highlighted by phraseDiff. Everything else is `lafzi`.
  */
-export function similarityOf(d: Pick<PairDiff, 'confidence'>): 'lafzi' | 'semantic' {
-  return d.confidence === 'low' ? 'semantic' : 'lafzi';
+export function similarityOf(d: Pick<PairDiff, 'confidence' | 'sharedRun'>): 'lafzi' | 'semantic' {
+  return d.confidence === 'low' && d.sharedRun < MIN_PHRASE ? 'semantic' : 'lafzi';
 }

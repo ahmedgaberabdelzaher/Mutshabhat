@@ -41,6 +41,18 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.queryByTestId('analogue-8:3')).toBeNull(); // 2:3 ~ 8:3 is lafzi
   });
 
+  it('shows a HifzLink pilot pair even when it is semantic, with its type badge, without any filter', async () => {
+    const screen = await open('/ayah/75/31'); // 75:31 ~ 75:32: pilot pair, no shared words
+    expect(screen.getByTestId('analogue-pilot-75:32')).toBeTruthy();
+    expect(screen.getByTestId('analogue-type-semantic-75:32')).toHaveTextContent('تشابه معنوي');
+  });
+
+  it('highlights a phrase-level lafzi pair around the shared phrase', async () => {
+    const screen = await open('/ayah/2/25'); // 2:25 ~ 3:15 share «جنات تجري من تحتها الأنهار»
+    expect(screen.getByTestId('analogue-type-lafzi-3:15')).toBeTruthy();
+    expect(screen.getByTestId('rule-3:15')).toHaveTextContent(/إبراز آلي حول العبارة المشتركة/);
+  });
+
   it('handles an ayah with no analogues', async () => {
     const screen = await open('/ayah/108/1');
     expect(screen.getByTestId('no-analogues')).toHaveTextContent('لا توجد نظائر مرشّحة لهذه الآية.');
@@ -59,11 +71,18 @@ describe('difference highlighting — review build (QMT-26 AC3)', () => {
     expect(screen.getByTestId('rule-27:2-status')).toHaveTextContent('مسوّدة');
   });
 
-  it('hides semantic pairs by default and lists them via the filter, with no precise difference location', async () => {
-    const screen = await open('/ayah/2/255');
-    expect(screen.queryAllByTestId(/^analogue-semantic-/)).toHaveLength(0);
+  it('hides non-pilot semantic pairs by default and lists them via the filter, with no precise difference location', async () => {
+    const screen = await open('/ayah/2/3'); // 2:3 has non-pilot semantic pairs (little shared wording)
+    // Default view: only pilot pairs may be semantic (PO: pilot always visible, with a type badge).
+    const defaultSemantic = screen.queryAllByTestId(/^analogue-type-semantic-/);
+    for (const el of defaultSemantic) {
+      const id = String(el.props.testID).replace('analogue-type-semantic-', '');
+      expect(screen.getByTestId(`analogue-pilot-${id}`)).toBeTruthy();
+    }
+    expect(screen.getAllByTestId(/^analogue-type-lafzi-/).length).toBeGreaterThan(0);
     await fireEvent.press(screen.getByTestId('similarity-semantic'));
-    expect(screen.getAllByTestId(/^analogue-semantic-/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId(/^analogue-type-semantic-/).length).toBeGreaterThan(defaultSemantic.length);
+    expect(screen.queryAllByTestId(/^analogue-type-lafzi-/)).toHaveLength(0);
     expect(screen.getAllByTestId(/^rule-.*-semantic$/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/لا يتوفر تحديد دقيق لموضع الاختلاف/).length).toBeGreaterThan(0);
   });

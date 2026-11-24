@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AyahText } from '@/components/ayah-text';
-import { StatusBadge, Tag } from '@/components/status-badge';
+import { SimilarityBadge, StatusBadge, Tag } from '@/components/status-badge';
 import { colors, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Analogue } from '@/data';
 import { rangesFor } from '@/domain/highlight';
@@ -50,9 +50,14 @@ function RuleInfo({ rule, showBadge, testID }: { rule?: HighlightRule; showBadge
       </View>
     );
   }
-  const origin = rule.source === 'auto_diff' ? 'إبراز آلي بالمقارنة النصية' : 'إبراز من اللجنة';
+  const origin =
+    rule.source !== 'auto_diff'
+      ? 'إبراز من اللجنة'
+      : rule.method === 'phrase'
+        ? 'إبراز آلي حول العبارة المشتركة'
+        : 'إبراز آلي بالمقارنة النصية';
   const parts = [origin, GRANULARITY[rule.granularity]];
-  if (rule.confidence) parts.push(CONFIDENCE[rule.confidence]);
+  if (rule.confidence && rule.method !== 'phrase') parts.push(CONFIDENCE[rule.confidence]);
   return (
     <View style={styles.ruleRow} testID={testID}>
       <Text style={styles.meta}>{parts.join(' · ')}</Text>
@@ -108,8 +113,11 @@ export function AnalogueCard({ analogue, showBadge }: Props) {
         ))}
         {analogue.pilot ? <Tag label="عيّنة اللجنة" testID={`analogue-pilot-${analogue.ayahId}`} /> : null}
         {g.type ? <Tag label={g.type} /> : null}
-        {analogue.similarityType === 'semantic' ? (
-          <Tag label={SIMILARITY_LABELS.semantic} testID={`analogue-semantic-${analogue.ayahId}`} />
+        {showBadge ? (
+          <SimilarityBadge
+            type={analogue.similarityType}
+            testID={`analogue-type-${analogue.similarityType}-${analogue.ayahId}`}
+          />
         ) : null}
       </View>
       {g.note ? <Text style={styles.note}>{g.note}</Text> : null}

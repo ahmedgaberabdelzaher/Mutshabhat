@@ -1,4 +1,4 @@
-import { clusters, comparisonKey, diffPair, letterDiff, similarityOf, type Side } from '@/domain/diff';
+import { clusters, comparisonKey, diffPair, letterDiff, phraseDiff, similarityOf, type Side } from '@/domain/diff';
 import { getQuranRepository } from '@/data';
 
 const side = (id: string, text: string): Side => [{ ayahId: id, words: text.split(' ') }];
@@ -67,6 +67,58 @@ describe('auto diff (QMT-26)', () => {
   it('classifies verbal pairs as lafzi', () => {
     expect(similarityOf(diffPair(real('2:2'), real('27:2')))).toBe('lafzi');
     expect(similarityOf(diffPair(real('2:5'), real('31:5')))).toBe('lafzi');
+  });
+
+  it('phrase level: a low-overlap pair sharing ≥ 3 consecutive words is lafzi (2:25 ~ 3:15)', () => {
+    const whole = diffPair(real('2:25'), real('3:15'));
+    expect(whole.confidence).toBe('low');
+    expect(whole.sharedRun).toBe(5);
+    expect(similarityOf(whole)).toBe('lafzi');
+  });
+
+  it('phraseDiff locates the shared phrase and highlights the words around it', () => {
+    const d = phraseDiff(real('2:25'), real('3:15'));
+    // «جَنَّٰتٍ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ» = 2:25 words 7–11, 3:15 words 9–13.
+    expect(d.phrases).toEqual([
+      { a: [{ ayahId: '2:25', startWord: 7, endWord: 11 }], b: [{ ayahId: '3:15', startWord: 9, endWord: 13 }], length: 5 },
+    ]);
+    expect(d.a.ranges).toEqual([
+      { ayahId: '2:25', startWord: 5, endWord: 6 }, // أَنَّ لَهُمْ
+      { ayahId: '2:25', startWord: 12, endWord: 13 }, // كُلَّمَا رُزِقُوا۟
+    ]);
+    expect(d.b.ranges).toEqual([
+      { ayahId: '3:15', startWord: 7, endWord: 8 }, // عِندَ رَبِّهِمْ
+      { ayahId: '3:15', startWord: 14, endWord: 15 }, // خَٰلِدِينَ فِيهَا
+    ]);
+    // جَنَّٰتٍ / جَنَّٰتٌ inside the phrase: same letters, different case ending → letter-level only.
+    expect(d.a.letters).toEqual([expect.objectContaining({ ayahId: '2:25', word: 7 })]);
+    expect(d.granularity).toBe('letter');
+    expect(d.type).toBe('إبدال');
+  });
+
+  it('phraseDiff: a shared opening phrase highlights only what follows it (2:54 ~ 5:20)', () => {
+    const d = phraseDiff(real('2:54'), real('5:20'));
+    expect(d.phrases[0].length).toBe(5); // وَإِذْ قَالَ مُوسَىٰ لِقَوْمِهِۦ يَٰقَوْمِ
+    expect(d.a.ranges).toEqual([{ ayahId: '2:54', startWord: 5, endWord: 6 }]);
+    expect(d.b.ranges).toEqual([{ ayahId: '5:20', startWord: 5, endWord: 6 }]);
+  });
+
+  it('phraseDiff: synthetic — window words that also match are not highlighted; one-sided edge = زيادة', () => {
+    const d = phraseDiff(side('1:1', 'أ ب ج د هـ و'), side('1:2', 'ب ج د هـ'));
+    expect(d.phrases[0].length).toBe(4);
+    expect(d.a.ranges).toEqual([
+      { ayahId: '1:1', startWord: 0, endWord: 0 },
+      { ayahId: '1:1', startWord: 5, endWord: 5 },
+    ]);
+    expect(d.b.ranges).toEqual([]);
+    expect(d.type).toBe('زيادة');
+  });
+
+  it('pairs without a ≥ 3-word shared phrase and little overlap stay semantic', () => {
+    const d = diffPair(real('75:31'), real('75:32'));
+    expect(d.sharedRun).toBeLessThan(3);
+    expect(similarityOf(d)).toBe('semantic');
+    expect(phraseDiff(real('75:31'), real('75:32')).phrases).toEqual([]);
   });
 
   it('ignores pause marks and normalises alef forms only for comparison', () => {
