@@ -1,0 +1,18 @@
+process.env.EXPO_PUBLIC_APP_FLAVOR = 'production';
+
+/* eslint-disable @typescript-eslint/no-require-imports -- modules must load after the flavor is set */
+const { renderRouter } = require('expo-router/testing-library');
+const SurahPicker = require('@/app/browse/surah/index').default;
+const SurahPositions = require('@/app/browse/surah/[surah]').default;
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+const routes = { 'browse/surah/index': SurahPicker, 'browse/surah/[surah]': SurahPositions };
+
+describe('browse by surah — production build (QMT-30)', () => {
+  it('shows approved positions only (none yet) and no candidate record', async () => {
+    const screen = await renderRouter(routes, { initialUrl: '/browse/surah/2' });
+    expect(screen.getByTestId('no-positions')).toHaveTextContent('لا توجد مواضع معتمدة هنا بعد.');
+    expect(screen.queryByText('مسوّدة')).toBeNull();
+    expect(screen.queryByText('قيد المراجعة')).toBeNull();
+  });
+});
