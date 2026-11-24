@@ -6,6 +6,8 @@ const SurahPicker = require('@/app/browse/surah/index').default;
 const SurahPositions = require('@/app/browse/surah/[surah]').default;
 const JuzPicker = require('@/app/browse/juz/index').default;
 const JuzPositions = require('@/app/browse/juz/[juz]').default;
+const PagePicker = require('@/app/browse/page/index').default;
+const PagePositions = require('@/app/browse/page/[page]').default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const routes = {
@@ -13,6 +15,8 @@ const routes = {
   'browse/surah/[surah]': SurahPositions,
   'browse/juz/index': JuzPicker,
   'browse/juz/[juz]': JuzPositions,
+  'browse/page/index': PagePicker,
+  'browse/page/[page]': PagePositions,
 };
 
 describe('browse by surah — review build (QMT-30)', () => {
@@ -48,5 +52,23 @@ describe('browse by juz — review build (QMT-31)', () => {
     expect(ids.length).toBeGreaterThan(0);
     expect(ids.every((id: string) => getQuranRepository().getAyah(id).juz === 30)).toBe(true);
     expect(screen.queryAllByText(/مسوّدة|قيد المراجعة/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('browse by page — review build (QMT-32)', () => {
+  it('lists Madinah pages from Tanzil metadata', async () => {
+    const screen = await renderRouter(routes, { initialUrl: '/browse/page' });
+    expect(screen.getByTestId('page-1')).toHaveTextContent(/الصفحة ١/);
+    expect(screen.getByTestId('page-2')).toHaveTextContent(/البقرة ١/);
+  });
+
+  it('shows only positions on the chosen page, in mushaf order', async () => {
+    const { getQuranRepository } = require('@/data'); // eslint-disable-line @typescript-eslint/no-require-imports
+    const screen = await renderRouter(routes, { initialUrl: '/browse/page/2' });
+    const ids = screen.getAllByTestId(/^position-/).map((n: { props: { testID: string } }) => n.props.testID.slice(9));
+    expect(ids).toContain('2:2');
+    expect(ids.every((id: string) => getQuranRepository().getAyah(id).page === 2)).toBe(true);
+    const order = ids.map((id: string) => getQuranRepository().absoluteIndex(id));
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 });
