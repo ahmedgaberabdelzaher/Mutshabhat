@@ -51,7 +51,7 @@ function PositionRow({ position, showBadge }: { position: Position; showBadge: b
     <Link
       href={{ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(ayah.surah), ayah: String(ayah.ayah) } }}
       asChild>
-      <Pressable style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]} testID={`position-${ayah.id}`}>
+      <Pressable style={styles.row} testID={`position-${ayah.id}`}>
         <View style={styles.rowHead}>
           <Text style={styles.ref}>{`${ayah.surahName} ${toArabicDigits(ayah.ayah)}`}</Text>
           <Text style={styles.count}>{`${toArabicDigits(position.analogueCount)} نظير`}</Text>
