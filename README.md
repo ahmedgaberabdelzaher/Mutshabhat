@@ -1,56 +1,44 @@
-# Welcome to your Expo app 👋
+# Mutshabhat | متشابهات
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A cross-platform Quran app to help review and memorize the **mutashabihat** (similar verses).
 
-## Get started
+تطبيق قرآن متعدد المنصات للمساعدة على مراجعة وحفظ **المتشابهات**.
 
-1. Install dependencies
+This repository currently contains a clean Expo starter scaffold. Feature work will follow once business requirements are shared by the BA.
 
-   ```bash
-   npm install
-   ```
+يحتوي هذا المستودع حاليًا على هيكل مشروع Expo مبدئي نظيف. سيتم بناء الميزات بعد وصول متطلبات الأعمال من الـ BA.
 
-2. Start the app
+## Stack
 
-   ```bash
-   npx expo start
-   ```
+- React Native + Expo (SDK 58)
+- TypeScript
+- Expo Router (file-based routing)
+- Targets: iOS and Android (web is also available via Expo)
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Getting started
 
 ```bash
-npm run reset-project
+cd ~/Projects/Mutshabhat
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Then open the app in Expo Go, an iOS simulator, or an Android emulator.
 
-### Other setup steps
+## RTL readiness
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+The app will be Arabic-first, so right-to-left (RTL) layout should be considered from the start of feature work:
 
-## Learn more
+- Enable RTL at the app root (for example with React Native's `I18nManager` and Expo's localization support) when screens are built.
+- Use start/end spacing (`paddingStart` / `marginEnd`) instead of left/right so layout flips correctly.
+- Prefer Quran-capable fonts (such as KFGQPC or Amiri Quran) and test text wrapping, diacritics (tashkeel), and verse layout in RTL.
+- Keep navigation, icons, and gestures RTL-aware (back chevrons, tab order, swipe direction).
 
-To learn more about developing your project with Expo, look at the following resources:
+These notes are a reminder only; RTL is not wired up in this scaffold.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Scripts
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `npm start` — start the Expo dev server
+- `npm run ios` — open on iOS
+- `npm run android` — open on Android
+- `npm run web` — open in a browser
