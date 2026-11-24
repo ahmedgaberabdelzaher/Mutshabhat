@@ -79,6 +79,10 @@ export type HighlightRule = {
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */
   source: 'auto_diff' | 'committee';
   algorithm?: string;
+  /** How much of the pair matched word-for-word; low = thematic rather than verbal similarity. Persisted uncertainty. */
+  confidence?: 'high' | 'medium' | 'low';
+  matchRatio?: number;
+  /** Relative to pair[0]: زيادة = pair[0] has extra words; نقص = pair[0] lacks words present in pair[1]. */
   type?: DifferenceType;
   status: ReviewStatus;
   review: ReviewMeta;

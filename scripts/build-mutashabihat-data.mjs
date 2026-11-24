@@ -122,6 +122,8 @@ if (existsSync(autoDiff)) {
   highlightRules = buildHighlightRules(groups, quran.surahs);
 }
 
+const { ALGORITHM } = existsSync(autoDiff) ? await import(pathToFileURL(autoDiff).href) : {};
+
 const dataset = {
   schemaVersion: 1,
   kind: 'review',
@@ -133,6 +135,7 @@ const dataset = {
     waqar144: 'Waqar144/Quran_Mutashabihat_Data 7b259fc, CC0 1.0',
     quranpedia: `Quranpedia.net similar.json.gz dump ${qp.license.version}, Quranpedia.net Data License`,
     text: 'Tanzil Uthmani 1.1 (word indexes refer to Tanzil tokens)',
+    ...(ALGORITHM ? { highlightRules: ALGORITHM } : {}),
   },
   groups,
   highlightRules,
@@ -142,3 +145,8 @@ const count = (name) => groups.filter((g) => g.source.name === name).length;
 console.log(
   `Review dataset: ${groups.length} groups (hifzlink ${count('hifzlink')}, waqar144 ${count('waqar144')}, quranpedia ${count('quranpedia')}), ${highlightRules.length} highlight rules.`,
 );
+if (highlightRules.length) {
+  const by = (list, key) => list.reduce((m, x) => ((m[key(x)] = (m[key(x)] ?? 0) + 1), m), {});
+  console.log('Pairs by similarityType:', by(highlightRules, (r) => r.similarityType));
+  console.log('Groups by source/similarityType:', by(groups, (g) => `${g.source.name}/${g.similarityType}`));
+}

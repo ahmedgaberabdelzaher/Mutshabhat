@@ -46,3 +46,26 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.getByTestId('no-analogues')).toHaveTextContent('لا توجد نظائر مرشّحة لهذه الآية.');
   });
 });
+
+describe('difference highlighting — review build (QMT-26 AC3)', () => {
+  it('highlights the differing words on both sides and shows the rule status', async () => {
+    const screen = await open('/ayah/2/2');
+    // Data-driven rule auto:2:2|27:2 — «لِّلْمُتَّقِينَ» vs «وَبُشْرَىٰ لِلْمُؤْمِنِينَ».
+    const quran = getQuranRepository();
+    expect(screen.getByTestId('analogue-text-27:2-word')).toHaveTextContent(quran.getAyah('27:2').words.slice(1, 3).join(' '));
+    expect(screen.getByTestId('self-text-27:2-2:2-word')).toHaveTextContent(quran.getAyah('2:2').words[6]);
+    // Highlighting never changes the text.
+    expect(screen.getByTestId('analogue-text-27:2-source')).toHaveTextContent(quran.getAyah('27:2').text, { exact: true });
+    expect(screen.getByTestId('rule-27:2-status')).toHaveTextContent('مسوّدة');
+  });
+
+  it('hides semantic pairs by default and lists them via the filter, with no precise difference location', async () => {
+    const screen = await open('/ayah/2/255');
+    expect(screen.queryAllByTestId(/^analogue-semantic-/)).toHaveLength(0);
+    await fireEvent.press(screen.getByTestId('similarity-semantic'));
+    expect(screen.getAllByTestId(/^analogue-semantic-/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId(/^rule-.*-semantic$/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/لا يتوفر تحديد دقيق لموضع الاختلاف/).length).toBeGreaterThan(0);
+  });
+});
+

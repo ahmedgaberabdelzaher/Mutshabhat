@@ -48,9 +48,9 @@
     "lint": "expo lint",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "build:data": "node scripts/build-quran-data.mjs && node scripts/build-mutashabihat-data.mjs",
+    "build:data": "node scripts/build-quran-data.mjs && npm run build:mutashabihat",
     "start:production": "EXPO_PUBLIC_APP_FLAVOR=production expo start",
-    "build:mutashabihat": "node scripts/build-mutashabihat-data.mjs",
+    "build:mutashabihat": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-mutashabihat-data.mjs",
     "check:production-bundle": "node scripts/check-production-bundle.mjs",
     "update:review": "EXPO_PUBLIC_APP_FLAVOR=review npx eas-cli@latest update --channel review",
     "update:production": "EXPO_PUBLIC_APP_FLAVOR=production npx eas-cli@latest update --channel production"

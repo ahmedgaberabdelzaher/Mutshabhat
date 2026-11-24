@@ -61,3 +61,39 @@ Defence in depth:
 Screens read only through `MutashabihatRepository` (`src/data/mutashabihat-repository.ts`). The datasets and highlight rules are JSON in the JS bundle, so a new dataset version ships as an **EAS Update** to the matching channel (`npm run update:review` / `npm run update:production`) with no native rebuild. A later API-backed repository can replace the local one without touching screens.
 
 Not done yet (needs Ahmed's Expo account): `eas init` to create the project, then set `EAS_PROJECT_ID` so `app.config.ts` adds `updates.url`. No `eas build` / `eas update` has been run.
+
+## Highlight rules (QMT-26)
+
+Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pair of ayahs (`pair`, ordered by mushaf position).
+
+```jsonc
+{
+  "id": "auto:2:2|27:2",
+  "pair": ["2:2", "27:2"],
+  "ranges": [{ "ayahId": "2:2", "startWord": 6, "endWord": 6 }, { "ayahId": "27:2", "startWord": 1, "endWord": 2 }],
+  "letterRanges": [{ "ayahId": "…", "word": 3, "start": 5, "end": 7 }], // optional, UTF-16 offsets inside a word
+  "granularity": "word",          // word | letter | none (identical texts, or a semantic pair)
+  "similarityType": "lafzi",      // lafzi | semantic (see classification rule below)
+  "source": "auto_diff",          // or "committee"
+  "algorithm": "lcs-word-v1",
+  "confidence": "medium",         // high | medium | low (low ⇔ semantic) — persisted uncertainty
+  "matchRatio": 0.14,
+  "type": "إبدال",                 // relative to pair[0]; only when the pattern is unambiguous
+  "status": "draft",
+  "review": { "version": 1 }
+}
+```
+
+- Word indexes refer to Tanzil tokens (`text.split(' ')`); the app renders spans over the unchanged string (`src/domain/highlight.ts`), and a test re-joins every rule's segments to the exact text.
+- `npm run build:mutashabihat` regenerates auto rules with `src/domain/diff.ts`: word LCS on letter-only keys (diacritics, Quranic marks and alef forms ignored for matching), differences inside the aligned region plus edge substitutions, letter ranges for diacritic-only differences and 1↔1 similar-word substitutions.
+- **Classification rule (lafzi vs semantic)** — `similarityOf()` in `src/domain/diff.ts`. Words are compared by letter-only keys (diacritics, Quranic marks, alef forms ignored) and aligned by word LCS. A pair is **`semantic`** when the shared wording is small:
+  1. no shared word, or
+  2. exactly one shared word while the shorter side has more than 4 words, or
+  3. shared (LCS) words < 30% of the shorter side's words.
+
+  Everything else is **`lafzi`**. Semantic pairs get a rule with `similarityType: "semantic"`, `confidence: "low"`, `granularity: "none"` and no ranges (no false precision); the review build shows «تشابه معنوي … لا يتوفر تحديد دقيق لموضع الاختلاف». A group is `lafzi` if at least one of its pairs is lafzi, else `semantic`. The committee can reclassify a pair by editing `similarityType` on its rule (data change, OTA).
+- Counts in review dataset v1 (6,830 pairs): **3,063 lafzi / 3,767 semantic** pairs; groups 2,476 lafzi / 452 semantic (HifzLink pilot 253 / 32). Per source (a pair counted under every source listing it): HifzLink 253/32, Waqar144 1,095/393, Quranpedia 2,476/3,511.
+- Known limit: 916 semantic pairs still share a run of ≥ 3 consecutive words inside long ayahs (phrase-level similarity, e.g. 2:25 ~ 3:15 «جنات تجري من تحتها الأنهار»). The rule keeps them semantic because the diff cannot place the difference precisely; a phrase-anchored diff could move them to lafzi later (PO decision).
+- Group members keep `differenceRanges: []` because no licensed source provides ranges; pairwise ranges live in `highlightRules`.
+- The committee corrects a rule by editing its ranges (→ `source: "committee"`, version + 1, status per the lifecycle). Shipping the edited JSON is an OTA update — no app rebuild.
+- Beta/production only use rules whose status is `approved`.

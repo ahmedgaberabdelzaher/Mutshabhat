@@ -1,5 +1,5 @@
 import { parseFlavor, visibilityFor } from '@/config/flavor';
-import { productionFixture, reviewFixture } from '@/data/__fixtures__/mutashabihat.fixture';
+import { productionFixture, reviewFixture, rule } from '@/data/__fixtures__/mutashabihat.fixture';
 import { DatasetPolicyError, LocalMutashabihatRepository } from '@/data/mutashabihat-repository';
 import { getQuranRepository } from '@/data';
 
@@ -114,3 +114,26 @@ describe('beta / production builds (QMT-48 AC2, QMT-25 AC1/2/4, DAT-06)', () => 
     expect(repo.getDatasetInfo().groupCount).toBe(0);
   });
 });
+
+describe('highlight rules per flavor (QMT-26 AC3/AC4)', () => {
+  const withRules = (ds: typeof productionFixture) => ({
+    ...ds,
+    highlightRules: [rule('2:5', '31:5', 'approved'), rule('2:2', '31:3', 'draft'), rule('2:2', '27:2', 'under_review')],
+  });
+
+  it('beta/production highlight approved records only', () => {
+    for (const flavor of ['beta', 'production'] as const) {
+      const repo = new LocalMutashabihatRepository(withRules(productionFixture), visibilityFor(flavor), pos);
+      expect(repo.getHighlightRule('31:5', '2:5')?.status).toBe('approved');
+      expect(repo.getHighlightRule('2:2', '31:3')).toBeUndefined();
+      expect(repo.getHighlightRule('27:2', '2:2')).toBeUndefined();
+    }
+  });
+
+  it('review build exposes candidate highlight rules, in either pair order', () => {
+    const repo = new LocalMutashabihatRepository(withRules(reviewFixture), visibilityFor('review'), pos);
+    expect(repo.getHighlightRule('31:3', '2:2')?.status).toBe('draft');
+    expect(repo.getHighlightRule('2:2', '27:2')?.status).toBe('under_review');
+  });
+});
+

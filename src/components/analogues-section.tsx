@@ -30,6 +30,7 @@ export function AnaloguesSection({ ayahId }: { ayahId: AyahId }) {
       {review ? (
         <>
           <Muted>نسخة المراجعة: تشمل بيانات مرشّحة غير معتمدة؛ حالة كل سجل موضّحة بشارته.</Muted>
+          <Muted>الخلفية الصفراء: كلمات مختلفة · البرتقالية: حروف أو حركات مختلفة.</Muted>
           <ScopeToggle value={scope} onChange={setScope} />
           <SimilarityToggle value={similarity} onChange={setSimilarity} />
         </>
