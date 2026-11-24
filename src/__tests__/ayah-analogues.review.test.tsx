@@ -34,6 +34,13 @@ describe('ayah + analogues — review build (QMT-25 AC3)', () => {
     expect(screen.getByTestId('no-analogues')).toHaveTextContent('لا توجد نظائر لهذه الآية في عيّنة اللجنة.');
   });
 
+  it('offers the lafzi/semantic filter, defaulting to lafzi', async () => {
+    const screen = await open('/ayah/2/3');
+    expect(screen.getByTestId('similarity-lafzi')).toHaveProp('accessibilityState', { selected: true });
+    await fireEvent.press(screen.getByTestId('similarity-semantic'));
+    expect(screen.queryByTestId('analogue-8:3')).toBeNull(); // 2:3 ~ 8:3 is lafzi
+  });
+
   it('handles an ayah with no analogues', async () => {
     const screen = await open('/ayah/108/1');
     expect(screen.getByTestId('no-analogues')).toHaveTextContent('لا توجد نظائر مرشّحة لهذه الآية.');
@@ -52,10 +59,13 @@ describe('difference highlighting — review build (QMT-26 AC3)', () => {
     expect(screen.getByTestId('rule-27:2-status')).toHaveTextContent('مسوّدة');
   });
 
-  it('says so when no precise range is available', async () => {
+  it('hides semantic pairs by default and lists them via the filter, with no precise difference location', async () => {
     const screen = await open('/ayah/2/255');
-    const none = screen.queryAllByText('لا يتوفر تحديد دقيق لموضع الاختلاف من البيانات المرخّصة المتاحة.');
-    expect(none.length).toBeGreaterThan(0);
+    expect(screen.queryAllByTestId(/^analogue-semantic-/)).toHaveLength(0);
+    await fireEvent.press(screen.getByTestId('similarity-semantic'));
+    expect(screen.getAllByTestId(/^analogue-semantic-/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId(/^rule-.*-semantic$/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/لا يتوفر تحديد دقيق لموضع الاختلاف/).length).toBeGreaterThan(0);
   });
 });
 

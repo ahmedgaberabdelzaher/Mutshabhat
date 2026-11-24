@@ -32,7 +32,11 @@ export const SOURCES: SourceAttribution[] = [
     license: 'Quranpedia.net Data License — إصدار التفريغ 2026-11-21',
     licenseUrl: 'https://quranpedia.net/dumps/LICENSE.md',
     url: 'https://quranpedia.net',
-    lines: ['Similar-ayah data from Quranpedia.net («الموسوعة القرآنية»), operated by OsoulCenter (مركز أصول).'],
+    lines: [
+      'Similar-ayah data from Quranpedia.net («الموسوعة القرآنية»), operated by OsoulCenter (مركز أصول).',
+      'المصدر: الموسوعة القرآنية quranpedia.net — تاريخ نسخة البيانات (dump version): 2026-11-21 (similar.json.gz).',
+      'شرط الترخيص: الاستعمال داخل التطبيقات مجاني، ويلزم عند إعادة نشر البيانات ذكرُ «الموسوعة القرآنية quranpedia.net» مصدرًا مع رابط الموقع وبيانُ تاريخ النسخة.',
+    ],
   },
   {
     key: 'waqar144',

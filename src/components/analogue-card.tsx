@@ -6,7 +6,7 @@ import { StatusBadge, Tag } from '@/components/status-badge';
 import { colors, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Analogue } from '@/data';
 import { rangesFor } from '@/domain/highlight';
-import { SOURCE_LABELS, type HighlightRule } from '@/domain/mutashabihat';
+import { SIMILARITY_LABELS, SOURCE_LABELS, type HighlightRule } from '@/domain/mutashabihat';
 import type { Ayah } from '@/domain/quran';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
@@ -38,6 +38,16 @@ function RuleInfo({ rule, showBadge, testID }: { rule?: HighlightRule; showBadge
       <Text style={styles.meta} testID={`${testID}-none`}>
         لا يتوفر تحديد دقيق لموضع الاختلاف من البيانات المرخّصة المتاحة.
       </Text>
+    );
+  }
+  if (rule.similarityType === 'semantic') {
+    return (
+      <View style={styles.ruleRow} testID={`${testID}-semantic`}>
+        <Text style={styles.meta}>
+          {`${SIMILARITY_LABELS.semantic} (اشتراك لفظي قليل) · لا يتوفر تحديد دقيق لموضع الاختلاف.`}
+        </Text>
+        {showBadge ? <StatusBadge status={rule.status} testID={`${testID}-status`} /> : null}
+      </View>
     );
   }
   const origin = rule.source === 'auto_diff' ? 'إبراز آلي بالمقارنة النصية' : 'إبراز من اللجنة';
@@ -98,6 +108,9 @@ export function AnalogueCard({ analogue, showBadge }: Props) {
         ))}
         {analogue.pilot ? <Tag label="عيّنة اللجنة" testID={`analogue-pilot-${analogue.ayahId}`} /> : null}
         {g.type ? <Tag label={g.type} /> : null}
+        {analogue.similarityType === 'semantic' ? (
+          <Tag label={SIMILARITY_LABELS.semantic} testID={`analogue-semantic-${analogue.ayahId}`} />
+        ) : null}
       </View>
       {g.note ? <Text style={styles.note}>{g.note}</Text> : null}
     </View>

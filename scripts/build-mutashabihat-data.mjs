@@ -145,3 +145,8 @@ const count = (name) => groups.filter((g) => g.source.name === name).length;
 console.log(
   `Review dataset: ${groups.length} groups (hifzlink ${count('hifzlink')}, waqar144 ${count('waqar144')}, quranpedia ${count('quranpedia')}), ${highlightRules.length} highlight rules.`,
 );
+if (highlightRules.length) {
+  const by = (list, key) => list.reduce((m, x) => ((m[key(x)] = (m[key(x)] ?? 0) + 1), m), {});
+  console.log('Pairs by similarityType:', by(highlightRules, (r) => r.similarityType));
+  console.log('Groups by source/similarityType:', by(groups, (g) => `${g.source.name}/${g.similarityType}`));
+}
