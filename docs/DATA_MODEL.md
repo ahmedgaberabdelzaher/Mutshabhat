@@ -26,20 +26,35 @@ Review dataset statuses in Sprint 1:
 - 285 HifzLink curated pairs → `under_review`, `pilot: true`, `reviewCycle: "QMT-49"` (committee pilot set).
 - 1,348 Waqar144 entries and 1,295 de-duplicated Quranpedia groups → `draft`.
 
+## Similarity type: lafzi vs semantic
+
+The MVP covers **verbal (لفظي) mutashabihat** only. Every pair and group carries `similarityType`:
+
+- `lafzi` — the two ayahs share most of their wording and differ in a few words/letters.
+- `semantic` — little shared wording (similar meaning / theme). Kept in the review dataset for the committee, **hidden from the default view** (records list, ayah analogues, browse positions) and listed only when the reviewer picks «تشابه معنوي» in the similarity filter. In the review build they show «لا يوجد موضع اختلاف محدد» because no word-level highlight applies.
+
+Where it lives: `highlightRules[].similarityType` (pair level, authoritative) and `groups[].similarityType` (group level: `lafzi` if at least one pair is lafzi). A pair without a rule inherits its group's type. The classification rule itself is defined with the auto-diff (QMT-26) further down / in `scripts/lib/auto-diff.mjs`.
+
+Beta/production guarantees (tested in `mutashabihat-repository.test.ts`):
+
+1. A group must be **explicitly** `similarityType: "lafzi"` to be shown; untagged or `semantic` groups are dropped even if `approved`.
+2. Any rule tagged `semantic` (any status) blocks that pair, even inside a lafzi group.
+3. The `semantic` filter is not offered and returns nothing.
+
 ## Flavors
 
 `EXPO_PUBLIC_APP_FLAVOR` = `review` | `beta` | `production` (default **production**, the safe choice).
 
 | Flavor | Dataset | Visible statuses | Status badge | EAS Update channel | iOS / Android id |
 | --- | --- | --- | --- | --- | --- |
-| review | review | draft, under_review (approved if any) — never rejected | yes | `review` | `com.ahmedgaber.mutshabhat.review` |
+| review | review | draft, under_review **and approved** (so the committee can revisit approvals) — never rejected | yes | `review` | `com.ahmedgaber.mutshabhat.review` |
 | beta | production | approved | no | `beta` | `com.ahmedgaber.mutshabhat.beta` |
 | production | production | approved | no | `production` | `com.ahmedgaber.mutshabhat` |
 
 Defence in depth:
 
 1. **Bundle level** — `src/data/datasets.ts` only `require`s the review JSON when the bundle is built for `review`; Metro drops it from beta/production bundles. `npm run check:production-bundle` exports all three web bundles and fails if candidate data appears outside the review bundle.
-2. **Repository level** — `LocalMutashabihatRepository` refuses a dataset whose `kind` doesn't match the flavor and filters records by the flavor's visible statuses before anything reaches the UI.
+2. **Repository level** — `LocalMutashabihatRepository` refuses a dataset whose `kind` doesn't match the flavor and filters records by the flavor's visible statuses and allowed similarity types (beta/production: explicit `lafzi` only) before anything reaches the UI.
 
 ## Swapping data without a rebuild
 
