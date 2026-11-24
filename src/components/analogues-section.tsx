@@ -26,6 +26,7 @@ export function AnaloguesSection({ ayahId }: { ayahId: AyahId }) {
       {review ? (
         <>
           <Muted>بيانات مرشّحة للمراجعة، وليست معتمدة من اللجنة العلمية بعد.</Muted>
+          <Muted>الخلفية الصفراء: كلمات مختلفة · البرتقالية: حروف أو حركات مختلفة.</Muted>
           <ScopeToggle value={scope} onChange={setScope} />
         </>
       ) : null}

@@ -46,3 +46,31 @@ Defence in depth:
 Screens read only through `MutashabihatRepository` (`src/data/mutashabihat-repository.ts`). The datasets and highlight rules are JSON in the JS bundle, so a new dataset version ships as an **EAS Update** to the matching channel (`npm run update:review` / `npm run update:production`) with no native rebuild. A later API-backed repository can replace the local one without touching screens.
 
 Not done yet (needs Ahmed's Expo account): `eas init` to create the project, then set `EAS_PROJECT_ID` so `app.config.ts` adds `updates.url`. No `eas build` / `eas update` has been run.
+
+## Highlight rules (QMT-26)
+
+Highlighting is data-driven: `highlightRules[]` in the dataset, one rule per pair of ayahs (`pair`, ordered by mushaf position).
+
+```jsonc
+{
+  "id": "auto:2:2|27:2",
+  "pair": ["2:2", "27:2"],
+  "ranges": [{ "ayahId": "2:2", "startWord": 6, "endWord": 6 }, { "ayahId": "27:2", "startWord": 1, "endWord": 2 }],
+  "letterRanges": [{ "ayahId": "…", "word": 3, "start": 5, "end": 7 }], // optional, UTF-16 offsets inside a word
+  "granularity": "word",          // word | letter | none (texts identical)
+  "source": "auto_diff",          // or "committee"
+  "algorithm": "lcs-word-v1",
+  "confidence": "medium",         // high | medium — persisted uncertainty
+  "matchRatio": 0.14,
+  "type": "إبدال",                 // relative to pair[0]; only when the pattern is unambiguous
+  "status": "draft",
+  "review": { "version": 1 }
+}
+```
+
+- Word indexes refer to Tanzil tokens (`text.split(' ')`); the app renders spans over the unchanged string (`src/domain/highlight.ts`), and a test re-joins every rule's segments to the exact text.
+- `npm run build:mutashabihat` regenerates auto rules with `src/domain/diff.ts`: word LCS on letter-only keys (diacritics, Quranic marks and alef forms ignored for matching), differences inside the aligned region plus edge substitutions, letter ranges for diacritic-only differences and 1↔1 similar-word substitutions.
+- Pairs with little shared wording (thematic similarity: < 30% overlap) get **no rule**; the app then says «لا يتوفر تحديد دقيق لموضع الاختلاف من البيانات المرخّصة المتاحة» instead of inventing precision.
+- Group members keep `differenceRanges: []` because no licensed source provides ranges; pairwise ranges live in `highlightRules`.
+- The committee corrects a rule by editing its ranges (→ `source: "committee"`, version + 1, status per the lifecycle). Shipping the edited JSON is an OTA update — no app rebuild.
+- Beta/production only use rules whose status is `approved`.

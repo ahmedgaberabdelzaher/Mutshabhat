@@ -1,4 +1,10 @@
-import type { MutashabihGroup, MutashabihatDataset, ReviewStatus, SourceName } from '@/domain/mutashabihat';
+import type {
+  HighlightRule,
+  MutashabihGroup,
+  MutashabihatDataset,
+  ReviewStatus,
+  SourceName,
+} from '@/domain/mutashabihat';
 
 /** Test fixtures covering every review status (QMT-48 DoD). */
 export function group(
@@ -45,3 +51,15 @@ export const productionFixture: MutashabihatDataset = {
   ],
   highlightRules: [],
 };
+
+export function rule(a: string, b: string, status: ReviewStatus): HighlightRule {
+  return {
+    id: `t:${a}|${b}`,
+    pair: [a, b],
+    ranges: [{ ayahId: a, startWord: 0, endWord: 0 }],
+    granularity: 'word',
+    source: status === 'approved' ? 'committee' : 'auto_diff',
+    status,
+    review: { version: 1 },
+  };
+}
