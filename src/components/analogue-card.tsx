@@ -5,7 +5,7 @@ import { AyahText } from '@/components/ayah-text';
 import { StatusBadge, Tag } from '@/components/status-badge';
 import { colors, spacing } from '@/config/theme';
 import { getQuranRepository, type Analogue } from '@/data';
-import { SOURCE_LABELS } from '@/domain/mutashabihat';
+import { SIMILARITY_LABELS, SOURCE_LABELS } from '@/domain/mutashabihat';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 type Props = { analogue: Analogue; showBadge: boolean };
@@ -41,6 +41,9 @@ export function AnalogueCard({ analogue, showBadge }: Props) {
         ))}
         {analogue.pilot ? <Tag label="عيّنة اللجنة" testID={`analogue-pilot-${analogue.ayahId}`} /> : null}
         {g.type ? <Tag label={g.type} /> : null}
+        {analogue.similarityType === 'semantic' ? (
+          <Tag label={SIMILARITY_LABELS.semantic} testID={`analogue-semantic-${analogue.ayahId}`} />
+        ) : null}
       </View>
       {g.note ? <Text style={styles.note}>{g.note}</Text> : null}
     </View>
