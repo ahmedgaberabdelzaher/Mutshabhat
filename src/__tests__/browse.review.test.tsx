@@ -8,6 +8,7 @@ const JuzPicker = require('@/app/browse/juz/index').default;
 const JuzPositions = require('@/app/browse/juz/[juz]').default;
 const PagePicker = require('@/app/browse/page/index').default;
 const PagePositions = require('@/app/browse/page/[page]').default;
+const { getQuranRepository } = require('@/data');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const routes = {
@@ -29,6 +30,10 @@ describe('browse by surah — review build (QMT-30)', () => {
   it('shows only positions of the chosen surah, in mushaf order, with status badges', async () => {
     const screen = await renderRouter(routes, { initialUrl: '/browse/surah/27' });
     expect(screen.getByTestId('position-27:2')).toBeTruthy();
+    // Title = the similar word/phrase (data), details (surah name + ayah number) kept below it.
+    const title = screen.getByTestId('title-position-27:2');
+    expect(getQuranRepository().getAyah('27:2').text.includes(String(title.props.children))).toBe(true);
+    expect(screen.getByTestId('position-27:2')).toHaveTextContent(/النمل ٢/);
     expect(screen.queryByTestId('position-2:2')).toBeNull();
     expect(screen.getAllByText('قيد المراجعة').length).toBeGreaterThan(0);
     const ids = screen.getAllByTestId(/^position-/).map((n: { props: { testID: string } }) => n.props.testID);
@@ -46,7 +51,6 @@ describe('browse by juz — review build (QMT-31)', () => {
   });
 
   it('shows only positions inside the chosen juz, with status badges', async () => {
-    const { getQuranRepository } = require('@/data'); // eslint-disable-line @typescript-eslint/no-require-imports
     const screen = await renderRouter(routes, { initialUrl: '/browse/juz/30' });
     const ids = screen.getAllByTestId(/^position-/).map((n: { props: { testID: string } }) => n.props.testID.slice(9));
     expect(ids.length).toBeGreaterThan(0);
@@ -63,7 +67,6 @@ describe('browse by page — review build (QMT-32)', () => {
   });
 
   it('shows only positions on the chosen page, in mushaf order', async () => {
-    const { getQuranRepository } = require('@/data'); // eslint-disable-line @typescript-eslint/no-require-imports
     const screen = await renderRouter(routes, { initialUrl: '/browse/page/2' });
     const ids = screen.getAllByTestId(/^position-/).map((n: { props: { testID: string } }) => n.props.testID.slice(9));
     expect(ids).toContain('2:2');

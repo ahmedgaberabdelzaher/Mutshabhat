@@ -3,68 +3,95 @@ import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FlavorBanner } from '@/components/flavor-banner';
+import { ListTitleText } from '@/components/list-title';
 import { ScopeToggle } from '@/components/scope-toggle';
 import { SimilarityToggle } from '@/components/similarity-toggle';
 import { SimilarityBadge, StatusBadge, Tag } from '@/components/status-badge';
 import { Muted } from '@/components/ui';
 import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
-import { getMutashabihatRepository, getQuranRepository, type Scope } from '@/data';
-import { SOURCE_LABELS, type MutashabihGroup, type SimilarityType } from '@/domain/mutashabihat';
+import { getMutashabihatRepository, getQuranRepository, type RecordRow, type Scope } from '@/data';
+import { SOURCE_LABELS, type SimilarityType } from '@/domain/mutashabihat';
+import { fallbackTitle } from '@/domain/title';
 import { toArabicDigits } from '@/lib/arabic-digits';
+import { refLabel } from '@/lib/ref-label';
 
-function refLabel(id: string) {
-  const a = getQuranRepository().getAyah(id);
-  return a ? `${a.surahName} ${toArabicDigits(a.ayah)}` : id;
-}
-
-/** Every visible record with its status badge and source (QMT-48 AC4). */
+/**
+ * Every visible record with its status badge and source (QMT-48 AC4). One row per distinct similar phrase:
+ * duplicates are merged (see getRecordRows / docs/DATA_MODEL.md "De-duplication"); a row opens its positions.
+ */
 export default function RecordsScreen() {
   const repo = getMutashabihatRepository();
   const review = repo.policy.flavor === 'review';
   const [scope, setScope] = useState<Scope>(review ? 'pilot' : 'all');
   const [similarity, setSimilarity] = useState<SimilarityType>('lafzi');
-  const groups = repo.getGroups(scope, review ? similarity : 'lafzi');
+  const filter = review ? similarity : 'lafzi';
+  const rows = repo.getRecordRows(scope, filter);
 
   return (
     <FlatList
       style={styles.list}
       contentContainerStyle={styles.content}
-      data={groups}
-      keyExtractor={(g) => g.id}
+      data={rows}
+      keyExtractor={(r) => r.id}
       initialNumToRender={15}
       ListHeaderComponent={
         <View style={styles.header}>
           <FlavorBanner />
           {review ? <ScopeToggle value={scope} onChange={setScope} /> : null}
           {review ? <SimilarityToggle value={similarity} onChange={setSimilarity} /> : null}
-          <Muted>{`${toArabicDigits(groups.length)} سجلًا`}</Muted>
+          <Muted testID="records-count">{`${toArabicDigits(rows.length)} سجلًا`}</Muted>
         </View>
       }
       ListEmptyComponent={<Muted>لا توجد سجلات لعرضها في هذه النسخة.</Muted>}
-      renderItem={({ item }) => <RecordRow group={item} showBadge={repo.policy.showStatusBadge} />}
+      renderItem={({ item }) => (
+        <RecordRowView row={item} scope={scope} similarity={filter} showBadge={repo.policy.showStatusBadge} />
+      )}
     />
   );
 }
 
-function RecordRow({ group, showBadge }: { group: MutashabihGroup; showBadge: boolean }) {
-  const first = getQuranRepository().getAyah(group.members[0].ayahId)!;
+const MAX_REFS = 6;
+
+function RecordRowView({
+  row,
+  scope,
+  similarity,
+  showBadge,
+}: {
+  row: RecordRow;
+  scope: Scope;
+  similarity: SimilarityType;
+  showBadge: boolean;
+}) {
+  const first = getQuranRepository().getAyah(row.groups[0].members[0].ayahId)!;
+  const refs = row.ayahIds.slice(0, MAX_REFS).map(refLabel);
+  const more = row.ayahIds.length - refs.length;
+  const note = row.groups.find((g) => g.note)?.note;
   return (
-    <Link
-      href={{ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(first.surah), ayah: String(first.ayah) } }}
-      asChild>
-      <Pressable style={styles.row} testID={`record-${group.id}`}>
+    <Link href={{ pathname: '/record/[id]', params: { id: row.id, scope, similarity } }} asChild>
+      <Pressable style={styles.row} testID={`record-${row.id}`}>
+        <ListTitleText
+          title={row.title ?? fallbackTitle(first)}
+          similarityType={row.similarityType}
+          testID={`title-record-${row.id}`}
+        />
         <View style={styles.badges}>
-          {showBadge ? <StatusBadge status={group.status} testID={`status-${group.id}`} /> : null}
-          <Tag label={SOURCE_LABELS[group.source.name]} />
-          {group.pilot ? <Tag label="عيّنة اللجنة" /> : null}
-          {showBadge ? (
-            <SimilarityBadge type={group.similarityType ?? 'lafzi'} testID={`type-${group.id}`} />
-          ) : null}
+          {showBadge ? row.statuses.map((s) => <StatusBadge key={s} status={s} testID={`status-${row.id}-${s}`} />) : null}
+          {row.sources.map((s) => (
+            <Tag key={s} label={SOURCE_LABELS[s]} />
+          ))}
+          {row.pilot ? <Tag label="عيّنة اللجنة" /> : null}
+          {showBadge ? <SimilarityBadge type={row.similarityType} testID={`type-${row.id}`} /> : null}
         </View>
-        <Text style={styles.refs}>{group.members.map((m) => refLabel(m.ayahId)).join(' · ')}</Text>
-        {group.note ? (
+        <Text style={styles.refs} testID={`refs-${row.id}`}>
+          {refs.join(' · ') + (more > 0 ? ` · +${toArabicDigits(more)}` : '')}
+        </Text>
+        {row.ayahIds.length > 2 ? (
+          <Text style={styles.note}>{`${toArabicDigits(row.ayahIds.length)} مواضع`}</Text>
+        ) : null}
+        {note ? (
           <Text style={styles.note} numberOfLines={2}>
-            {group.note}
+            {note}
           </Text>
         ) : null}
       </Pressable>
@@ -85,6 +112,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   badges: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  refs: { fontSize: 16, color: colors.text, fontWeight: '600' },
+  refs: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   note: { fontSize: 13, color: colors.textMuted },
 });

@@ -44,6 +44,9 @@ export type MutashabihMember = {
   differenceRanges: WordRange[]; // empty if the source does not specify ranges
 };
 
+/** One original source record merged into a group (de-duplication). */
+export type SourceAttribution = { name: SourceName; ref?: string; groupId: string; note?: string; pilot?: boolean };
+
 export type MutashabihGroup = {
   id: string;
   members: MutashabihMember[];
@@ -51,6 +54,11 @@ export type MutashabihGroup = {
   status: ReviewStatus;
   review: ReviewMeta;
   source: { name: SourceName; ref?: string };
+  /**
+   * Present when several source records with the same set of ayahs were merged into this one (de-duplication,
+   * see docs/DATA_MODEL.md): every original attribution, the kept record first.
+   */
+  attributions?: SourceAttribution[];
   /** Part of the committee's pilot review set (QMT-49): the 285 HifzLink curated pairs. */
   pilot?: boolean;
   reviewCycle?: string;
@@ -60,11 +68,38 @@ export type MutashabihGroup = {
   sourceCategory?: string;
   /** Waqar144 `ctx`: show part of the following ayah for context. */
   showNextAyahContext?: boolean;
+  /** List title for the group (records screen); see docs/DATA_MODEL.md for the > 2 members rule. */
+  title?: TitleSpan;
+  titleBasis?: TitleBasis;
+  titleMethod?: TitleMethod;
+  /** How many members contain the title phrase. */
+  titleCoverage?: number;
   /** Group-level classification: lafzi if at least one of its pairs is lafzi. Beta/production require 'lafzi'. */
   similarityType?: SimilarityType;
 };
 
 /** Highlight rule for one pair of members (QMT-26). Stored in data so the committee can edit it without a rebuild. */
+/**
+ * List title (QMT-26 list titles): the similar word/phrase itself, as an exact word span of the Tanzil text
+ * (`text` = words startWord..endWord joined by spaces, i.e. an exact substring of the ayah). Generated at
+ * build time; the committee may edit it (basis = committee) and ship it as data (OTA).
+ */
+export type TitleSpan = { ayahId: AyahId; startWord: number; endWord: number; text: string };
+/** phrase = shared phrase (method=phrase); lcs = longest common contiguous part; fallback = beginning of the ayah. */
+export type TitleBasis = 'phrase' | 'lcs' | 'fallback' | 'committee';
+/**
+ * How the title was derived: shared = the shared part as is; extended = a 1-word shared part + the adjacent
+ * word of the same ayah; meaningful_word(_extended) = the longest shared part was particle-only, so the longest
+ * part with a meaningful word was used (then extended if 1 word); fallback = beginning of the ayah.
+ */
+export type TitleMethod =
+  | 'shared'
+  | 'extended'
+  | 'meaningful_word'
+  | 'meaningful_word_extended'
+  | 'fallback'
+  | 'committee';
+
 export type HighlightRule = {
   id: string;
   /** Ayah ids (first ayah of each member) of the pair, lexicographically ordered by mushaf position. */
@@ -81,6 +116,10 @@ export type HighlightRule = {
    * phrase of ≥ 3 words, highlighted around that phrase (see phraseDiff in src/domain/diff.ts).
    */
   method?: 'lcs' | 'phrase';
+  /** List title for this pair: one span per side, [pair[0] side, pair[1] side] (each in its own wording). */
+  titles?: [TitleSpan, TitleSpan];
+  titleBasis?: TitleBasis;
+  titleMethod?: TitleMethod;
   /** For method=phrase: the shared phrase(s) located on each side (word ranges). */
   phrases?: { a: WordRange[]; b: WordRange[]; length: number }[];
   /** auto_diff = computed by scripts/build-mutashabihat-data.mjs; committee = edited by reviewers. */

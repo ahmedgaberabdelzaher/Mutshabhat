@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ListTitleText } from '@/components/list-title';
 import { ScopeToggle } from '@/components/scope-toggle';
 import { SimilarityToggle } from '@/components/similarity-toggle';
 import { StatusBadge, Tag } from '@/components/status-badge';
@@ -10,6 +11,7 @@ import { colors, MAX_CONTENT_WIDTH, spacing } from '@/config/theme';
 import { getMutashabihatRepository, getQuranRepository, type Position, type Scope } from '@/data';
 import type { SimilarityType } from '@/domain/mutashabihat';
 import type { AyahId } from '@/domain/quran';
+import { fallbackTitle } from '@/domain/title';
 import { toArabicDigits } from '@/lib/arabic-digits';
 
 /**
@@ -39,9 +41,7 @@ export function PositionList({ ayahIds, header }: { ayahIds: AyahId[]; header?: 
         </View>
       }
       ListEmptyComponent={
-        <Muted testID="no-positions">
-          {review ? 'لا توجد مواضع مرشّحة هنا.' : 'لا توجد مواضع معتمدة هنا بعد.'}
-        </Muted>
+        <Muted testID="no-positions">{review ? 'لا توجد مواضع مرشّحة هنا.' : 'لا توجد مواضع معتمدة هنا بعد.'}</Muted>
       }
       renderItem={({ item }) => <PositionRow position={item} showBadge={repo.policy.showStatusBadge} />}
     />
@@ -50,19 +50,20 @@ export function PositionList({ ayahIds, header }: { ayahIds: AyahId[]; header?: 
 
 function PositionRow({ position, showBadge }: { position: Position; showBadge: boolean }) {
   const ayah = getQuranRepository().getAyah(position.ayahId)!;
-  const preview = ayah.words.slice(0, 6).join(' ') + (ayah.words.length > 6 ? ' …' : '');
+  const title = position.title ?? fallbackTitle(ayah);
   return (
     <Link
-      href={{ pathname: '/ayah/[surah]/[ayah]', params: { surah: String(ayah.surah), ayah: String(ayah.ayah) } }}
+      href={{
+        pathname: '/ayah/[surah]/[ayah]',
+        params: { surah: String(ayah.surah), ayah: String(ayah.ayah) },
+      }}
       asChild>
       <Pressable style={styles.row} testID={`position-${ayah.id}`}>
+        <ListTitleText title={title} similarityType={position.similarityType} testID={`title-position-${ayah.id}`} />
         <View style={styles.rowHead}>
           <Text style={styles.ref}>{`${ayah.surahName} ${toArabicDigits(ayah.ayah)}`}</Text>
           <Text style={styles.count}>{`${toArabicDigits(position.analogueCount)} نظير`}</Text>
         </View>
-        <Text style={styles.preview} numberOfLines={1}>
-          {preview}
-        </Text>
         {showBadge || position.pilot ? (
           <View style={styles.badges}>
             {showBadge ? position.statuses.map((s) => <StatusBadge key={s} status={s} />) : null}
@@ -76,7 +77,13 @@ function PositionRow({ position, showBadge }: { position: Position; showBadge: b
 
 const styles = StyleSheet.create({
   list: { backgroundColor: colors.background },
-  content: { padding: spacing.lg, gap: spacing.sm, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
+  content: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
+  },
   header: { gap: spacing.md, marginBottom: spacing.sm },
   row: {
     backgroundColor: colors.surface,
@@ -86,9 +93,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rowHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   ref: { fontSize: 17, fontWeight: '700', color: colors.text },
   count: { fontSize: 14, color: colors.primary, fontWeight: '600' },
-  preview: { fontSize: 15, color: colors.textMuted },
   badges: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
 });

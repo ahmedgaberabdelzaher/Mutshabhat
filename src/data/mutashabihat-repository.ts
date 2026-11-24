@@ -9,6 +9,7 @@ import type {
   SourceName,
 } from '@/domain/mutashabihat';
 import type { AyahId } from '@/domain/quran';
+import { groupTitle, pairTitle, titleKey, type ListTitle } from '@/domain/title';
 
 export type Scope = 'all' | 'pilot';
 /** Which similarity types to list. Default everywhere is 'lafzi' (MVP); 'semantic' is a review-build filter. */
@@ -38,6 +39,31 @@ export type Position = {
   analogueCount: number;
   statuses: ReviewStatus[];
   pilot: boolean;
+  /** Similarity type of the first analogue (shown with fallback titles). */
+  similarityType: SimilarityType;
+  /** Title from the first (primary) analogue's rule, in this ayah's wording; undefined → UI fallback. */
+  title?: ListTitle;
+};
+
+/**
+ * One row of the records (mutashabihat) list: one distinct similar phrase. Records with the same normalised title
+ * are merged into one row, and records whose ayahs all lie inside a larger record of the same list are folded
+ * into that record's row (no duplicates in the list; see docs/DATA_MODEL.md "De-duplication").
+ */
+export type RecordRow = {
+  /** Id of the row's primary record (pilot first, then HifzLink > Waqar144 > Quranpedia, then list order). */
+  id: string;
+  title?: ListTitle;
+  /** titleKey() of the title; the row's identity in the list. */
+  titleKey: string;
+  /** Every record shown in this row, primary first (no record appears in two rows). */
+  groups: MutashabihGroup[];
+  /** Every ayah (position) of the row, unique, mushaf order. */
+  ayahIds: AyahId[];
+  statuses: ReviewStatus[];
+  pilot: boolean;
+  sources: SourceName[];
+  similarityType: SimilarityType;
 };
 
 export type DatasetInfo = {
@@ -54,6 +80,8 @@ export interface MutashabihatRepository {
   getDatasetInfo(): DatasetInfo;
   /** Visible groups (already filtered by the build flavor's policy). */
   getGroups(scope?: Scope, similarity?: SimilarityFilter): MutashabihGroup[];
+  /** Records list rows: one row per distinct similar phrase (de-duplicated), in list order. */
+  getRecordRows(scope?: Scope, similarity?: SimilarityFilter): RecordRow[];
   getAnalogues(ayahId: AyahId, scope?: Scope, similarity?: SimilarityFilter): Analogue[];
   /** Ayah ids (mushaf order) that have at least one visible analogue. */
   getPositionAyahIds(scope?: Scope, similarity?: SimilarityFilter): AyahId[];
@@ -68,6 +96,11 @@ export const SOURCE_PRIORITY: SourceName[] = ['hifzlink', 'waqar144', 'quranpedi
 export class DatasetPolicyError extends Error {}
 
 const spanOf = (m: MutashabihMember): AyahId[] => m.ayahIds ?? [m.ayahId];
+const STATUS_ORDER: ReviewStatus[] = ['approved', 'under_review', 'draft', 'rejected'];
+/** Source names of a record, including merged duplicates (attributions). */
+export const sourcesOf = (g: MutashabihGroup): SourceName[] => g.attributions?.map((x) => x.name) ?? [g.source.name];
+const bySourcePriority = (names: SourceName[]) =>
+  [...new Set(names)].sort((a, b) => SOURCE_PRIORITY.indexOf(a) - SOURCE_PRIORITY.indexOf(b));
 const pairKey = (a: AyahId, b: AyahId) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
 /**
@@ -160,39 +193,125 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
     );
   }
 
+  getRecordRows(scope: Scope = 'all', similarity: SimilarityFilter = 'lafzi'): RecordRow[] {
+    const list = this.getGroups(scope, similarity);
+    const order = new Map(list.map((g, i) => [g, i]));
+    const ayahs = new Map(list.map((g) => [g, new Set(g.members.flatMap(spanOf))]));
+    const index = new Map<AyahId, MutashabihGroup[]>();
+    for (const g of list) {
+      for (const id of ayahs.get(g)!) {
+        const l = index.get(id);
+        if (l) l.push(g);
+        else index.set(id, [g]);
+      }
+    }
+    const rank = (g: MutashabihGroup) => [g.pilot ? 0 : 1, SOURCE_PRIORITY.indexOf(g.source.name), order.get(g)!];
+    const before = (x: MutashabihGroup, y: MutashabihGroup) => {
+      const [a, b] = [rank(x), rank(y)];
+      return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    };
+    // 1) A record whose ayahs all lie inside a larger record of this list is shown inside that record's row.
+    const host = new Map<MutashabihGroup, MutashabihGroup>();
+    for (const g of list) {
+      const own = ayahs.get(g)!;
+      const [first] = own;
+      const hosts = (index.get(first) ?? []).filter((b) => {
+        const other = ayahs.get(b)!;
+        return b !== g && other.size > own.size && [...own].every((id) => other.has(id));
+      });
+      if (hosts.length) host.set(g, hosts.sort((x, y) => ayahs.get(y)!.size - ayahs.get(x)!.size || before(x, y))[0]);
+    }
+    const root = (g: MutashabihGroup) => {
+      let r = g;
+      while (host.has(r)) r = host.get(r)!; // sizes strictly grow, so this ends
+      return r;
+    };
+    // 2) One row per normalised title (records without a title keep their own row).
+    const rows = new Map<string, { roots: MutashabihGroup[]; groups: MutashabihGroup[] }>();
+    for (const g of list) {
+      const r = root(g);
+      const key = r.title ? titleKey(r.title.text) : `#${r.id}`;
+      const row = rows.get(key) ?? rows.set(key, { roots: [], groups: [] }).get(key)!;
+      if (r === g) row.roots.push(g);
+      row.groups.push(g);
+    }
+    const out: RecordRow[] = [];
+    for (const [key, { roots, groups }] of rows) {
+      const primary = [...roots].sort(before)[0];
+      const ordered = [primary, ...groups.filter((g) => g !== primary).sort(before)];
+      const ids = [...new Set(ordered.flatMap((g) => [...ayahs.get(g)!]))].sort(
+        (a, b) => this.positionOf(a) - this.positionOf(b),
+      );
+      out.push({
+        id: primary.id,
+        title: groupTitle(primary),
+        titleKey: key,
+        groups: ordered,
+        ayahIds: ids,
+        statuses: STATUS_ORDER.filter((s) => ordered.some((g) => g.status === s)),
+        pilot: ordered.some((g) => g.pilot),
+        sources: bySourcePriority(ordered.flatMap(sourcesOf)),
+        similarityType: ordered.some((g) => (g.similarityType ?? 'lafzi') === 'lafzi') ? 'lafzi' : 'semantic',
+      });
+    }
+    return out.sort((a, b) => Math.min(...a.groups.map((g) => order.get(g)!)) - Math.min(...b.groups.map((g) => order.get(g)!)));
+  }
+
   getAnalogues(ayahId: AyahId, scope: Scope = 'all', similarity: SimilarityFilter = 'lafzi'): Analogue[] {
     const found = new Map<AyahId, { ayahIds: AyahId[]; selfAyahIds: AyahId[]; groups: MutashabihGroup[] }>();
+    const owner = new Map<AyahId, AyahId>(); // ayah -> key of the analogue that shows it
     for (const g of this.byAyah.get(ayahId) ?? []) {
       const self = g.members.find((m) => spanOf(m).includes(ayahId));
       if (!self) continue;
       for (const m of g.members) {
         if (m === self || spanOf(m).includes(ayahId)) continue;
-        const entry = found.get(m.ayahId);
-        if (entry) entry.groups.push(g);
-        else found.set(m.ayahId, { ayahIds: spanOf(m), selfAyahIds: spanOf(self), groups: [g] });
+        // One analogue per ayah: members whose spans overlap (e.g. Waqar144 [5:1, 5:2] and another source's 5:2)
+        // are one analogue, never two cards showing the same ayah.
+        const span = spanOf(m);
+        const hits = [...new Set(span.map((id) => owner.get(id)).filter((k): k is AyahId => !!k))];
+        let key = hits[0] ?? m.ayahId;
+        let entry = found.get(key);
+        if (!entry) {
+          entry = { ayahIds: [], selfAyahIds: spanOf(self), groups: [] };
+          found.set(key, entry);
+        }
+        for (const other of hits.slice(1)) {
+          const e = found.get(other)!;
+          entry.ayahIds.push(...e.ayahIds);
+          entry.groups.push(...e.groups);
+          found.delete(other);
+        }
+        if (!entry.groups.includes(g)) entry.groups.push(g);
+        entry.ayahIds = [...new Set([...entry.ayahIds, ...span])].sort((a, b) => this.positionOf(a) - this.positionOf(b));
+        if (key !== entry.ayahIds[0]) {
+          found.delete(key);
+          key = entry.ayahIds[0];
+          found.set(key, entry);
+        }
+        for (const id of entry.ayahIds) owner.set(id, key);
       }
     }
     const rank = (g: MutashabihGroup) => SOURCE_PRIORITY.indexOf(g.source.name);
     const analogues: Analogue[] = [];
-    for (const [id, e] of found) {
+    for (const e of found.values()) {
       const groups = [...e.groups].sort((a, b) => rank(a) - rank(b));
       const pilot = groups.some((g) => g.pilot);
       if (scope === 'pilot' && !pilot) continue;
       const primary = groups[0];
-      const primaryMember = primary.members.find((m) => m.ayahId === id)!;
+      const primaryMember = primary.members.find((m) => spanOf(m).some((x) => e.ayahIds.includes(x)))!;
       const primarySelf = primary.members.find((m) => spanOf(m).includes(ayahId))!;
-      const similarityType = this.pairSimilarity(primarySelf.ayahId, id, primary);
+      const similarityType = this.pairSimilarity(primarySelf.ayahId, primaryMember.ayahId, primary);
       if (!this.policy.allowedSimilarity.includes(similarityType)) continue; // never semantic in beta/production
       if (!this.pilotAlwaysVisible(pilot, similarity) && !this.matches(similarityType, similarity)) continue;
       analogues.push({
-        ayahId: id,
-        ayahIds: spanOf(primaryMember),
+        ayahId: primaryMember.ayahId,
+        ayahIds: e.ayahIds,
         selfAyahIds: spanOf(primarySelf),
         primary,
         groups,
         status: primary.status,
         pilot,
-        sources: [...new Set(groups.map((g) => g.source.name))],
+        sources: bySourcePriority(groups.flatMap(sourcesOf)),
         similarityType,
       });
     }
@@ -220,6 +339,8 @@ export class LocalMutashabihatRepository implements MutashabihatRepository {
         analogueCount: analogues.length,
         statuses: [...new Set(analogues.map((a) => a.status))],
         pilot: analogues.some((a) => a.pilot),
+        similarityType: analogues[0].similarityType,
+        title: pairTitle(this.getHighlightRule(analogues[0].selfAyahIds[0], analogues[0].ayahId), analogues[0].selfAyahIds),
       });
     }
     return out.sort((a, b) => this.positionOf(a.ayahId) - this.positionOf(b.ayahId));

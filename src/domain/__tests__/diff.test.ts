@@ -1,4 +1,17 @@
-import { clusters, comparisonKey, diffPair, letterDiff, phraseDiff, similarityOf, type Side } from '@/domain/diff';
+import {
+  clusters,
+  comparisonKey,
+  diffPair,
+  extendToTwoWords,
+  findKeySequence,
+  isTitleStopword,
+  meaningfulSharedSpan,
+  letterDiff,
+  phraseDiff,
+  sharedSpan,
+  similarityOf,
+  type Side,
+} from '@/domain/diff';
 import { getQuranRepository } from '@/data';
 
 const side = (id: string, text: string): Side => [{ ayahId: id, words: text.split(' ') }];
@@ -80,7 +93,11 @@ describe('auto diff (QMT-26)', () => {
     const d = phraseDiff(real('2:25'), real('3:15'));
     // «جَنَّٰتٍ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ» = 2:25 words 7–11, 3:15 words 9–13.
     expect(d.phrases).toEqual([
-      { a: [{ ayahId: '2:25', startWord: 7, endWord: 11 }], b: [{ ayahId: '3:15', startWord: 9, endWord: 13 }], length: 5 },
+      {
+        a: [{ ayahId: '2:25', startWord: 7, endWord: 11 }],
+        b: [{ ayahId: '3:15', startWord: 9, endWord: 13 }],
+        length: 5,
+      },
     ]);
     expect(d.a.ranges).toEqual([
       { ayahId: '2:25', startWord: 5, endWord: 6 }, // أَنَّ لَهُمْ
@@ -121,6 +138,67 @@ describe('auto diff (QMT-26)', () => {
     expect(phraseDiff(real('75:31'), real('75:32')).phrases).toEqual([]);
   });
 
+  it('sharedSpan: longest common contiguous part, inside one ayah per side (list titles)', () => {
+    expect(sharedSpan(real('2:25'), real('3:15'))).toEqual({
+      a: { ayahId: '2:25', startWord: 7, endWord: 11 },
+      b: { ayahId: '3:15', startWord: 9, endWord: 13 },
+      length: 5,
+    });
+    expect(sharedSpan(real('2:2'), real('27:2'))).toBeNull(); // only «هُدًى» shared…
+    expect(sharedSpan(real('2:2'), real('27:2'), 1)?.length).toBe(1); // …allowed for lafzi titles
+    expect(sharedSpan(real('75:31'), real('75:32'), 1)).toBeNull();
+    // A run never crosses an ayah boundary (the title must be a substring of ONE ayah).
+    const twoAyahs: Side = [
+      { ayahId: '1:1', words: ['أ', 'ب'] },
+      { ayahId: '1:2', words: ['ج', 'د'] },
+    ];
+    expect(sharedSpan(twoAyahs, side('9:9', 'أ ب ج د'))?.length).toBe(2);
+  });
+
+  it('title stopwords: particles / function words on the undiacritised form, with و / ف prefixes', () => {
+    for (const w of ['مِّنَ', 'فِى', 'لَا', 'مَآ', 'إِنَّ', 'وَلَا', 'فَمَن', 'ٱلَّذِينَ', 'عَلَيْهِمْ', 'ذَٰلِكَ', 'عَنْهَا']) {
+      expect(isTitleStopword(w)).toBe(true);
+    }
+    for (const w of ['هُدًى', 'ٱللَّهِ', 'يَوْمَ', 'جَنَّٰتٍ', 'ٱلْقَيُّومُ']) expect(isTitleStopword(w)).toBe(false);
+  });
+
+  it('meaningfulSharedSpan skips particle-only shared runs', () => {
+    // 16:11 ~ 30:21: longest shared run «إِنَّ فِى ذَٰلِكَ» is particle-only → «لِّقَوْمٍ يَتَفَكَّرُونَ».
+    const s = meaningfulSharedSpan(real('16:11'), real('30:21'))!;
+    expect(s.movedOffParticle).toBe(true);
+    expect(s.length).toBe(2);
+    // Only particles shared → no title span at all (fallback).
+    expect(meaningfulSharedSpan(side('1:1', 'قَالَ مِنْ فِى ذَهَبَ'), side('1:2', 'جَآءَ مِنْ فِى رَجَعَ'))).toBeNull();
+  });
+
+  it('extendToTwoWords: adds the following word, the preceding one at the ayah end, none for a 1-word ayah', () => {
+    const w = 'ذَٰلِكَ ٱلْكِتَٰبُ لَا رَيْبَ فِيهِ هُدًى لِّلْمُتَّقِينَ'.split(' ');
+    expect(extendToTwoWords({ ayahId: 'x', startWord: 5, endWord: 5 }, w)).toEqual({
+      range: { ayahId: 'x', startWord: 5, endWord: 6 },
+      extended: true,
+    });
+    expect(extendToTwoWords({ ayahId: 'x', startWord: 6, endWord: 6 }, w).range).toEqual({
+      ayahId: 'x',
+      startWord: 5,
+      endWord: 6,
+    });
+    expect(extendToTwoWords({ ayahId: '2:1', startWord: 0, endWord: 0 }, ['الٓمٓ'])).toEqual({
+      range: { ayahId: '2:1', startWord: 0, endWord: 0 },
+      extended: false,
+    });
+    expect(extendToTwoWords({ ayahId: 'x', startWord: 0, endWord: 1 }, w).extended).toBe(false);
+  });
+
+  it('findKeySequence matches by letters only, inside one ayah', () => {
+    const keys = 'جنت تجري من تحتها الانهر'.split(' ');
+    expect(findKeySequence(real('3:15'), keys)).toEqual({
+      ayahId: '3:15',
+      startWord: 9,
+      endWord: 13,
+    });
+    expect(findKeySequence(real('2:2'), keys)).toBeNull();
+  });
+
   it('ignores pause marks and normalises alef forms only for comparison', () => {
     expect(comparisonKey('ۛ')).toBe('');
     expect(comparisonKey('ٱلْكِتَٰبُ')).toBe(comparisonKey('الكتب'));
@@ -129,7 +207,13 @@ describe('auto diff (QMT-26)', () => {
   it('real pair 2:2 ~ 27:2: highlights the differing ending, not the surrounding context', () => {
     const d = diffPair(real('2:2'), real('27:2'));
     const words2 = getQuranRepository().getAyah('2:2')!.words;
-    expect(d.a.ranges).toEqual([{ ayahId: '2:2', startWord: words2.length - 1, endWord: words2.length - 1 }]);
+    expect(d.a.ranges).toEqual([
+      {
+        ayahId: '2:2',
+        startWord: words2.length - 1,
+        endWord: words2.length - 1,
+      },
+    ]);
     expect(d.b.ranges).toEqual([{ ayahId: '27:2', startWord: 1, endWord: 2 }]);
   });
 

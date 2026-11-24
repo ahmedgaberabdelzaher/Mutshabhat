@@ -2,6 +2,7 @@ import { visibilityFor } from '@/config/flavor';
 import { loadBundledDataset } from '@/data/datasets';
 import { LocalMutashabihatRepository } from '@/data/mutashabihat-repository';
 import { getQuranRepository } from '@/data';
+import { comparisonKey, isTitleStopword } from '@/domain/diff';
 import type { MutashabihatDataset } from '@/domain/mutashabihat';
 
 const quran = getQuranRepository();
@@ -22,7 +23,7 @@ describe('bundled datasets (QMT-48 AC2)', () => {
   });
 
   it('review dataset holds candidate records only, each with source, version and valid ayah ids', () => {
-    expect(review.groups.length).toBeGreaterThan(2000);
+    expect(review.groups.length).toBeGreaterThan(1500);
     for (const g of review.groups) {
       expect(['draft', 'under_review']).toContain(g.status);
       expect(['quranpedia', 'waqar144', 'hifzlink']).toContain(g.source.name);
@@ -38,8 +39,30 @@ describe('bundled datasets (QMT-48 AC2)', () => {
     expect(pilot.every((g) => g.source.name === 'hifzlink' && g.reviewCycle === 'QMT-49')).toBe(true);
   });
 
-  it('includes all Waqar144 entries', () => {
-    expect(review.groups.filter((g) => g.source.name === 'waqar144')).toHaveLength(1348);
+  it('includes all Waqar144 entries (kept records + merged duplicates keep their attribution)', () => {
+    const waqar = review.groups.flatMap((g) => g.attributions ?? [{ name: g.source.name, groupId: g.id }]);
+    expect(waqar.filter((x) => x.name === 'waqar144')).toHaveLength(1348);
+  });
+
+  it('has no duplicate records: one record per set of ayahs, no ayah twice in a record (owner: no duplicates)', () => {
+    const span = (m: { ayahId: string; ayahIds?: string[] }) => m.ayahIds ?? [m.ayahId];
+    const sets = new Set<string>();
+    for (const g of review.groups) {
+      const all = g.members.flatMap(span);
+      expect(new Set(all).size).toBe(all.length);
+      const key = g.members.map((m) => span(m).join('+')).sort().join(',');
+      expect(sets.has(key)).toBe(false); // also covers A~B vs B~A and the same pair from several sources
+      sets.add(key);
+    }
+    // Merged records keep every source attribution, the kept record first; status = most advanced; pilot kept.
+    const attributions = review.groups.flatMap((g) => g.attributions ?? [{ name: g.source.name, groupId: g.id }]);
+    expect(attributions).toHaveLength(2928);
+    expect(new Set(attributions.map((x) => x.groupId)).size).toBe(2928);
+    for (const g of review.groups.filter((x) => x.attributions)) {
+      expect(g.attributions![0]).toMatchObject({ name: g.source.name, groupId: g.id });
+      expect(g.attributions!.length).toBeGreaterThan(1);
+      if (g.attributions!.some((x) => x.pilot)) expect(g.pilot).toBe(true);
+    }
   });
 
   it('stores highlight rules as data: auto_diff drafts with valid ranges (QMT-26)', () => {
@@ -99,6 +122,66 @@ describe('bundled datasets (QMT-48 AC2)', () => {
     expect(count('semantic')).toBeGreaterThan(1000);
   });
 
+  it('list titles are exact substrings of the Tanzil text, generated as data for every pair and group', () => {
+    const check = (t: { ayahId: string; startWord: number; endWord: number; text: string }) => {
+      const ayah = quran.getAyah(t.ayahId)!;
+      expect(t.text).toBe(ayah.words.slice(t.startWord, t.endWord + 1).join(' '));
+      expect(ayah.text.includes(t.text)).toBe(true);
+      expect(t.text.length).toBeGreaterThan(0);
+    };
+    const basis: Record<string, number> = {};
+    for (const r of review.highlightRules) {
+      expect(r.titles).toHaveLength(2);
+      r.titles!.forEach(check);
+      basis[r.titleBasis!] = (basis[r.titleBasis!] ?? 0) + 1;
+      if (r.titleBasis === 'phrase') expect(r.method).toBe('phrase');
+      expect(r.status).toBe('draft');
+      if (r.titleBasis === 'fallback') {
+        expect(r.titleMethod).toBe('fallback');
+        expect(r.titles!.every((t) => t.startWord === 0 && t.endWord < 5)).toBe(true);
+      } else {
+        expect(['shared', 'extended', 'meaningful_word', 'meaningful_word_extended']).toContain(r.titleMethod);
+        for (const t of r.titles!) {
+          const words = quran.getAyah(t.ayahId)!.words;
+          // Minimum 2 words (a one-word ayah such as «الٓمٓ» is the only exception) …
+          expect(t.endWord - t.startWord + 1).toBeGreaterThanOrEqual(Math.min(2, words.length));
+          // … and at least one meaningful (non-particle) word.
+          expect(t.text.split(' ').some((w) => !isTitleStopword(w))).toBe(true);
+        }
+      }
+    }
+    expect(Object.keys(basis).sort()).toEqual(['fallback', 'lcs', 'phrase']);
+    for (const g of review.groups) {
+      check(g.title!);
+      expect(g.titleMethod).toBeDefined();
+      if (g.titleMethod !== 'fallback') {
+        const words = quran.getAyah(g.title!.ayahId)!.words;
+        expect(g.title!.endWord - g.title!.startWord + 1).toBeGreaterThanOrEqual(Math.min(2, words.length));
+        expect(g.title!.text.split(' ').some((w) => !isTitleStopword(w))).toBe(true);
+      }
+      expect(g.titleCoverage).toBeLessThanOrEqual(g.members.length);
+      if (g.titleBasis !== 'fallback') expect(g.titleCoverage).toBeGreaterThanOrEqual(2);
+    }
+    // 2:25 ~ 3:15: the shared phrase, in each ayah's own wording.
+    const r = review.highlightRules.find((x) => x.pair.join() === '2:25,3:15')!;
+    expect(r.titleBasis).toBe('phrase');
+    expect(r.titles!.map((t) => t.text)).toEqual([
+      quran.getAyah('2:25')!.words.slice(7, 12).join(' '), // جَنَّٰتٍ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
+      quran.getAyah('3:15')!.words.slice(9, 14).join(' '), // جَنَّٰتٌ تَجْرِى مِن تَحْتِهَا ٱلْأَنْهَٰرُ
+    ]);
+    // One shared word, extended with the next word of each ayah (2:2 ~ 27:2: «هُدًى»).
+    const one = review.highlightRules.find((x) => x.pair.join() === '2:2,27:2')!;
+    expect(one.titleMethod).toBe('extended');
+    expect(one.titles!.map((t) => t.text)).toEqual([
+      quran.getAyah('2:2')!.words.slice(5, 7).join(' '), // هُدًى لِّلْمُتَّقِينَ
+      quran.getAyah('27:2')!.words.slice(0, 2).join(' '), // هُدًى وَبُشْرَىٰ
+    ]);
+    // Longest shared run is particle-only («إِنَّ فِى ذَٰلِكَ») → the meaningful run is used.
+    const moved = review.highlightRules.find((x) => x.pair.join() === '16:11,30:21')!;
+    expect(moved.titleMethod).toBe('meaningful_word');
+    expect(moved.titles![0].text.split(' ').map(comparisonKey)).toEqual(['لقوم', 'يتفكرون']);
+  });
+
   it('review build lists all 285 HifzLink pilot pairs in the default view, whatever their type', () => {
     const repo = new LocalMutashabihatRepository(review, visibilityFor('review'), (id) => quran.absoluteIndex(id));
     const pilot = review.groups.filter((g) => g.pilot);
@@ -118,7 +201,10 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       ...review,
       kind: 'production',
       groups: review.groups.map((g) => ({ ...g, status: 'approved' })),
-      highlightRules: review.highlightRules.map((r) => ({ ...r, status: 'approved' })),
+      highlightRules: review.highlightRules.map((r) => ({
+        ...r,
+        status: 'approved',
+      })),
     };
     const semanticPairs = new Set(
       review.highlightRules.filter((r) => r.similarityType === 'semantic').map((r) => r.pair.join('|')),
@@ -130,7 +216,9 @@ describe('bundled datasets (QMT-48 AC2)', () => {
       for (const id of repo.getPositionAyahIds('all', 'any')) {
         for (const a of repo.getAnalogues(id, 'all', 'any')) {
           expect(a.similarityType).toBe('lafzi');
-          const key = [a.selfAyahIds[0], a.ayahId].sort((x, y) => quran.absoluteIndex(x) - quran.absoluteIndex(y)).join('|');
+          const key = [a.selfAyahIds[0], a.ayahId]
+            .sort((x, y) => quran.absoluteIndex(x) - quran.absoluteIndex(y))
+            .join('|');
           expect(semanticPairs.has(key)).toBe(false);
         }
       }

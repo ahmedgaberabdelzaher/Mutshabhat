@@ -109,6 +109,58 @@ for (const a of qp.data) {
   });
 }
 
+// 4) De-duplicate records with the same set of ayahs (owner: "the list must not contain duplicates").
+// The same unordered pair (A~B and B~A, or from several sources) and repeated Quranpedia/Waqar144 entries
+// become ONE record. Precedence for the kept record (id, source, members order, note):
+//   pilot (HifzLink QMT-49) > hifzlink > waqar144 > quranpedia > first seen.
+// Status = the most advanced (approved > under_review > draft); pilot if any merged record is pilot.
+// Every merged record keeps its attribution in `attributions` (name, ref, original id, note).
+const SOURCE_RANK = { hifzlink: 0, waqar144: 1, quranpedia: 2 };
+const STATUS_RANK = { rejected: 0, draft: 1, under_review: 2, approved: 3 };
+const spanKey = (m) => (m.ayahIds ?? [m.ayahId]).join('+');
+const setKey = (g) => g.members.map(spanKey).sort().join(',');
+const bySet = new Map();
+for (const g of groups) {
+  const k = setKey(g);
+  const list = bySet.get(k);
+  if (list) list.push(g);
+  else bySet.set(k, [g]);
+}
+const rankOf = (g) => [g.pilot ? 0 : 1, SOURCE_RANK[g.source.name]];
+const attribution = (g) => ({
+  name: g.source.name,
+  ...(g.source.ref ? { ref: g.source.ref } : {}),
+  groupId: g.id,
+  ...(g.note ? { note: g.note } : {}),
+  ...(g.pilot ? { pilot: true } : {}),
+});
+const merged = new Map(); // first group of a set -> merged record
+let mergedAway = 0;
+for (const list of bySet.values()) {
+  if (list.length === 1) continue;
+  const sorted = [...list].sort((x, y) => {
+    const [a, b] = [rankOf(x), rankOf(y)];
+    return a[0] - b[0] || a[1] - b[1] || groups.indexOf(x) - groups.indexOf(y);
+  });
+  const keep = { ...sorted[0] };
+  keep.status = list.reduce((s, g) => (STATUS_RANK[g.status] > STATUS_RANK[s] ? g.status : s), keep.status);
+  keep.review = { ...keep.review, version: Math.max(...list.map((g) => g.review.version)) };
+  if (list.some((g) => g.pilot)) keep.pilot = true;
+  if (!keep.showNextAyahContext && list.some((g) => g.showNextAyahContext)) keep.showNextAyahContext = true;
+  keep.attributions = sorted.map(attribution);
+  merged.set(list[0], keep);
+  mergedAway += list.length - 1;
+}
+const deduped = [];
+for (const g of groups) {
+  const list = bySet.get(setKey(g));
+  if (list.length === 1) deduped.push(g);
+  else if (list[0] === g) deduped.push(merged.get(g));
+}
+const rawGroupCount = groups.length;
+groups.length = 0;
+groups.push(...deduped);
+
 const ids = new Set();
 for (const g of groups) {
   if (ids.has(g.id)) throw new Error(`Duplicate group id ${g.id}`);
@@ -143,7 +195,7 @@ const dataset = {
 writeFileSync(path.join(root, 'assets/data/review/mutashabihat.review.json'), JSON.stringify(dataset) + '\n');
 const count = (name) => groups.filter((g) => g.source.name === name).length;
 console.log(
-  `Review dataset: ${groups.length} groups (hifzlink ${count('hifzlink')}, waqar144 ${count('waqar144')}, quranpedia ${count('quranpedia')}), ${highlightRules.length} highlight rules.`,
+  `Review dataset: ${groups.length} groups (${rawGroupCount} source records, ${mergedAway} duplicates merged) (hifzlink ${count('hifzlink')}, waqar144 ${count('waqar144')}, quranpedia ${count('quranpedia')}), ${highlightRules.length} highlight rules.`,
 );
 if (highlightRules.length) {
   const by = (list, key) => list.reduce((m, x) => ((m[key(x)] = (m[key(x)] ?? 0) + 1), m), {});
