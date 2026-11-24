@@ -45,7 +45,7 @@ export function LinkRow({
 }) {
   return (
     <Link href={href} asChild>
-      <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} testID={testID}>
+      <Pressable style={styles.row} testID={testID}>
         <View style={styles.rowMain}>
           <Text style={styles.rowTitle}>{title}</Text>
           {subtitle ? <Text style={styles.muted}>{subtitle}</Text> : null}
@@ -99,7 +99,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  rowPressed: { backgroundColor: '#F3EEE2' },
   rowMain: { flex: 1, gap: 2 },
   rowTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
   chevron: { fontSize: 22, color: colors.textMuted },
